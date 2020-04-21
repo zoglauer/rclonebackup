@@ -112,7 +112,7 @@ fi
 
 echo " " 2>&1 | tee -a ${LOG} 
 echo "INFO: All tests passed! Starting rclone @ $(date) ...  " 2>&1 | tee -a ${LOG}
-rclone --config ${RCLONECONFIG} --bwlimit 8650k -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=1M --max-backlog 100000 sync ${RAIDDIR} ${NAME}encrypted: 2>&1 | tee -a ${LOG}
+rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=1M --max-backlog 999999 sync ${RAIDDIR} ${NAME}encrypted: 2>&1 | tee -a ${LOG}
 
 
 echo "INFO: Checking for duplicates... " 2>&1 | tee -a ${LOG}
@@ -123,7 +123,7 @@ fi
 
 
 echo "INFO: Starting to calculate size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}
-rclone --config ${RCLONECONFIG} size ${REMOTE} 2>&1 | tee -a ${LOG}
+rclone --config ${RCLONECONFIG} size ${NAME}encrypted: 2>&1 | tee -a ${LOG}
 
 
 echo "INFO: Checking used local space again for comparison @ $(date) ... " 2>&1 | tee -a ${LOG}
