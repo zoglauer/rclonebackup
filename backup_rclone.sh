@@ -117,8 +117,8 @@ rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --sta
 
 echo "INFO: Checking for duplicates... " 2>&1 | tee -a ${LOG}
 if grep -q "Duplicate object found" ${LOG}; then
-  echo "INFO: Duplicates found... " 2>&1 | tee -a ${LOG}
-  #rclone --config ${RCLONECONFIG} dedupe --dedupe-mode newest ${RAIDDIR}/${USERDIR} 2>&1 | tee -a ${LOG}
+  echo "INFO: Duplicates found and keeping only newest... " 2>&1 | tee -a ${LOG}
+  rclone --config ${RCLONECONFIG} -L --fast-list dedupe --dedupe-mode newest ${NAME}encrypted: 2>&1 | tee -a ${LOG}
 fi
 
 
