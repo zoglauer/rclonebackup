@@ -1,16 +1,17 @@
 #!/bin/bash
 
-NAME=""
+PROGRAMNAME="backup_home_tar.sh"
 
-commandhelp() {
+help() {
   echo ""
-  echo "backup_rclone";
+  echo "${PROGRAMNAME}";
   echo "Copyright by Andreas Zoglauer"
   echo ""
-  echo "Usage: backup_rclone [options]";
+  echo "Usage: bash ${PROGRAMNAME} [options]";
   echo ""
   echo "Options:"
   echo "  --name=[name]: The name of the directory to clone"
+  echo "  --backuphomes=[destination]: If set backup the home directories to [destination]"
   echo ""
   echo "Assumptions:"
   echo "(1) rclone is installed"
@@ -27,18 +28,24 @@ CMD=( "$@" )
 for C in "${CMD[@]}"; do
   if [[ ${C} == *-h* ]]; then
     echo ""
-    commandhelp
+    help
     exit 0
   fi
 done
+
+# Default options
+NAME=""
+BACKUPHOMEDESTINATION=""
 
 # Overwrite default options with user options:
 for C in "${CMD[@]}"; do
   if [[ ${C} == *-n*=* ]]; then
     NAME=`echo ${C} | awk -F"=" '{ print $2 }'`
+  elif [[ ${C} == *-b*=* ]]; then
+    BACKUPHOMEDESTINATION=`echo ${C} | awk -F"=" '{ print $2 }'`
   elif [[ ${C} == *-h* ]]; then
     echo ""
-    commandhelp
+    help
     exit 0
   else
     echo ""
@@ -111,7 +118,27 @@ if grep -A1 md0 /proc/mdstat | tail -n 1 | awk '{print $NF }' | grep _ > /dev/nu
 fi
 
 echo " " 2>&1 | tee -a ${LOG} 
-echo "INFO: All tests passed! Starting rclone @ $(date) ...  " 2>&1 | tee -a ${LOG}
+echo "INFO: All tests passed! " 2>&1 | tee -a ${LOG}
+
+if [[ ${BACKUPHOMEDESTINATION} != "" ]]; then 
+
+  echo " " 2>&1 | tee -a ${LOG} 
+  echo "INFO: Starting backup of home directories @ $(date) ...  " 2>&1 | tee -a ${LOG}
+
+  if [[ ! -d ${BACKUPHOMEDESTINATION} ]]; then
+    mkdir ${BACKUPHOMEDESTINATION}
+  fi
+
+  for D in `ls /home/*`; do
+    if [[ -d ${D} ]] && [[ ${D} != "lost+found" ]]; then
+      echo "INFO: Starting backup of ${D} @ $(date) ...  " 2>&1 | tee -a ${LOG}
+      bash backup_tar.sh -p="${D}" -f="${D}" -t="${BACKUPHOMEDESTINATION}" -r=1 -d=20
+    fi
+  done
+fi
+
+echo " " 2>&1 | tee -a ${LOG} 
+echo "INFO: Starting rclone @ $(date) ...  " 2>&1 | tee -a ${LOG}
 rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=1M --max-backlog 999999 sync ${RAIDDIR} ${NAME}encrypted: 2>&1 | tee -a ${LOG}
 
 
