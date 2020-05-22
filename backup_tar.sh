@@ -66,6 +66,15 @@ for C in "${CMD[@]}"; do
 done
 
 # Sanity checks
+
+type pigz >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "ERROR: pigz must be installed"
+  echo ""
+  exit 1
+fi 
+
 if [[ ${FOLDER} == "NONE____NONE" ]]; then
   echo ""
   echo "ERROR: You need to give a folder to backup"
@@ -142,7 +151,7 @@ echo "Using this number of rotations:  ${ROTATIONS}"
 echo "Using this number of diffs:      ${DIFFS}"
 
 # For testing create a new file in the folder
-mktemp -p ${FOLDER}
+#mktemp -p ${FOLDER}
 
 # Now do the actual backup
 
@@ -183,18 +192,22 @@ if [[ ${MAXDIFF} -ge ${DIFFS} ]] || [[ ${MAXROTATION} -eq 0 ]]; then
   echo ""
   echo "Creating new rotation with ID ${MAXROTATION}"
   
-  tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.log -czf ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz ${FOLDER}
+  tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.log --use-compress-program="pigz --best --recursive" -cf ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz ${FOLDER}
   
-  # Delete everything before the minimum rotation
-  MINROTATION=$(( MAXROTATION - ROTATIONS ))
-  for F in `ls ${BACKUPPREFIX}.*`; do
-    R=$(echo $F | awk -F".rot" '{ print $2 }' | awk -F"." '{print $1 }' )
-    if [[ ${R} =~ $re ]] ; then
-      if [[ ${R} -le ${MINROTATION} ]]; then
-        rm ${F}
+  if [[ $? -ne 0 ]]; then
+    echo "ERROR: tar exited with an error code -- not deleting anything"
+  else
+    # Delete everything before the minimum rotation
+    MINROTATION=$(( MAXROTATION - ROTATIONS ))
+    for F in `ls ${BACKUPPREFIX}.*`; do
+      R=$(echo $F | awk -F".rot" '{ print $2 }' | awk -F"." '{print $1 }' )
+      if [[ ${R} =~ $re ]] ; then
+        if [[ ${R} -le ${MINROTATION} ]]; then
+          rm ${F}
+        fi
       fi
-    fi
-  done
+    done
+  fi
 
 else
 # We create a new diff
@@ -204,7 +217,7 @@ else
   echo "Creating new diff ID ${MAXDIFF} for rotation ${MAXROTATION}"
 
   cp ${BACKUPPREFIX}.rot${MAXROTATION}.log ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log
-  tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log -czf ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz ${FOLDER}
+  tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log --use-compress-program="pigz --best --recursive" -cf ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz ${FOLDER}
 fi
 
 echo ""

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PROGRAMNAME="backup_home_tar.sh"
+PROGRAMNAME="backup_rclone.sh"
 
 help() {
   echo ""
@@ -11,7 +11,7 @@ help() {
   echo ""
   echo "Options:"
   echo "  --name=[name]: The name of the directory to clone"
-  echo "  --backuphomes=[destination]: If set backup the home directories to [destination]"
+  echo "  --backuphomes=[destination]: If set backup the home directories to [destination], which needs to be on the raid (top level)"
   echo ""
   echo "Assumptions:"
   echo "(1) rclone is installed"
@@ -81,12 +81,19 @@ if [ ! -f ${RCLONECONFIG} ]; then
   exit 1
 fi
 
+echo "INFO: Checking if this script is still running"  2>&1 | tee -a ${LOG}
+ps -efww | grep -w "[b]ackup_rclone.sh" | grep -v $$ | grep -v "sudo"
+Status=`ps -efww | grep -w "[b]ackup_rclone.sh" | grep -v $$ | grep -v "sudo" | awk -vpid=$$ '$2 != pid { print $2 }'`
+if [ ! -z "${Status}" ]; then
+  echo "ERROR: ${PROGRAMNAME} still running"  2>&1 | tee -a ${LOG}
+  exit 1
+fi
+
 echo "INFO: Checking if rclone is still running"  2>&1 | tee -a ${LOG}
 if [[ $(ps -Af | grep "[ ]rclone") != "" ]]; then
   echo "ERROR: rclone still running"  2>&1 | tee -a ${LOG}
   exit 1
 fi
-
 
 echo "INFO: Running \"du\" to trigger any failures" 2>&1 | tee -a ${LOG}
 du -s ${RAIDDIR}/${USERDIR} 2>&1 | tee -a ${LOG}
@@ -94,7 +101,6 @@ if [ "$?" != "0" ]; then
   echo "ERROR: Unable to read directory size via du" 2>&1 | tee -a ${LOG}
   exit 1 
 fi
-
 
 echo "INFO: Checking if the raid is mounted" 2>&1 | tee -a ${LOG}
 if ! grep -qs "${RAIDDIR}" /proc/mounts; then
@@ -125,14 +131,15 @@ if [[ ${BACKUPHOMEDESTINATION} != "" ]]; then
   echo " " 2>&1 | tee -a ${LOG} 
   echo "INFO: Starting backup of home directories @ $(date) ...  " 2>&1 | tee -a ${LOG}
 
-  if [[ ! -d ${BACKUPHOMEDESTINATION} ]]; then
-    mkdir ${BACKUPHOMEDESTINATION}
+  if [[ ! -d ${RAIDDIR}/${BACKUPHOMEDESTINATION} ]]; then
+    mkdir ${RAIDDIR}/${BACKUPHOMEDESTINATION}
   fi
 
-  for D in `ls /home/*`; do
-    if [[ -d ${D} ]] && [[ ${D} != "lost+found" ]]; then
+  for D in `find /home -maxdepth 1 -mindepth 1 -type d`; do
+    if [[ ${D} != *"lost+found"* ]]; then
       echo "INFO: Starting backup of ${D} @ $(date) ...  " 2>&1 | tee -a ${LOG}
-      bash backup_tar.sh -p="${D}" -f="${D}" -t="${BACKUPHOMEDESTINATION}" -r=1 -d=20
+      PREFIX="Backup.$(basename ${D})"
+      bash $(dirname "$0")/backup_tar.sh -p="${PREFIX}" -f="${D}" -t="${RAIDDIR}/${BACKUPHOMEDESTINATION}" -r=1 -d=20 2>&1 | tee -a ${LOG}
     fi
   done
 fi
