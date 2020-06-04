@@ -50,7 +50,7 @@ for C in "${CMD[@]}"; do
   else
     echo ""
     echo "ERROR: Unknown command line option: ${C}"
-    echo "       See \"dcosima --help\" for a list of options"
+    echo "       See \"${PROGRAMNAME} --help\" for a list of options"
     exit 1
   fi
 done
@@ -146,10 +146,10 @@ fi
 
 echo " " 2>&1 | tee -a ${LOG} 
 echo "INFO: Starting rclone @ $(date) ...  " 2>&1 | tee -a ${LOG}
-rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=1M --max-backlog 999999 sync ${RAIDDIR} ${NAME}encrypted: 2>&1 | tee -a ${LOG}
+rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=64M --max-backlog 999999 sync ${RAIDDIR} ${NAME}encrypted: 2>&1 | tee -a ${LOG}
 
 
-echo "INFO: Checking for duplicates... " 2>&1 | tee -a ${LOG}
+echo "INFO: Checking for duplicates  @ $(date) ... " 2>&1 | tee -a ${LOG}
 if grep -q "Duplicate object found" ${LOG}; then
   echo "INFO: Duplicates found and keeping only newest... " 2>&1 | tee -a ${LOG}
   rclone --config ${RCLONECONFIG} -L --fast-list dedupe --dedupe-mode newest ${NAME}encrypted: 2>&1 | tee -a ${LOG}
@@ -157,7 +157,7 @@ fi
 
 
 echo "INFO: Starting to calculate size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}
-rclone --config ${RCLONECONFIG} size ${NAME}encrypted: 2>&1 | tee -a ${LOG}
+rclone --config ${RCLONECONFIG} --fast-list size ${NAME}encrypted: 2>&1 | tee -a ${LOG}
 
 
 echo "INFO: Checking used local space again for comparison @ $(date) ... " 2>&1 | tee -a ${LOG}
@@ -165,7 +165,7 @@ du -s -B1 ${RAIDDIR}/. 2>&1 | tee -a ${LOG}
 
 
 echo " " 2>&1 | tee -a ${LOG}
-echo "INFO: Done! " 2>&1 | tee -a ${LOG}
+echo "INFO: Done @ $(date)! " 2>&1 | tee -a ${LOG}
 
 exit 0
 
