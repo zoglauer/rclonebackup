@@ -142,7 +142,7 @@ if [[ ${BACKUPHOMEDESTINATION} != "" ]]; then
     if [[ ${D} != *"lost+found"* ]]; then
       echo "INFO: Starting backup of ${D} @ $(date) ...  " 2>&1 | tee -a ${LOG}
       PREFIX="Backup.$(basename ${D})"
-      bash $(dirname "$0")/backup_tar.sh -p="${PREFIX}" -f="${D}" -t="${RAIDDIR}/${BACKUPHOMEDESTINATION}" -r=1 -d=50 2>&1 | tee -a ${LOG}
+      bash $(dirname "$0")/backup_tar.sh -p="${PREFIX}" -f="${D}" -t="${RAIDDIR}/${BACKUPHOMEDESTINATION}" -r=1 -d=5 2>&1 | tee -a ${LOG}
     fi
   done
 fi

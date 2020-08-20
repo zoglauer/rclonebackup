@@ -18,7 +18,8 @@ help() {
   echo "  --folder=[name]: The name of the directory to backup"
   echo "  --target=[name]: The distination where to store the backup"
   echo "  --rotations=[number]: The number of rotations to keep (minimum 2, default 2)"
-  echo "  --diffs=[number]: The number of diffs before starting a new rotation (minimum 2, default 10)"
+  echo "  --diffs=[number]: The number of diffs to keep (minimum 2, default 5)"
+  echo "  --maxratio=[percent]: The maximum size in percent a diff can of a rotation, before we start a new rotation (minium 5, maximum 50, default 10)"
   echo ""
 }
 
@@ -39,7 +40,8 @@ BACKUPPREFIX="Backup"
 FOLDER="NONE____NONE"
 TARGET="NONE____NONE"
 ROTATIONS=2
-DIFFS=10
+DIFFS=5
+MAXRATIO=10
 
 # Overwrite default options with user options:
 for C in "${CMD[@]}"; do
@@ -53,6 +55,8 @@ for C in "${CMD[@]}"; do
     ROTATIONS=`echo ${C} | awk -F"=" '{ print $2 }'`
   elif [[ ${C} == *-d*=* ]]; then
     DIFFS=`echo ${C} | awk -F"=" '{ print $2 }'`
+  elif [[ ${C} == *-m*=* ]]; then
+    MAXRATIO=`echo ${C} | awk -F"=" '{ print $2 }'`
   elif [[ ${C} == *-h* ]]; then
     echo ""
     help
@@ -143,12 +147,34 @@ if [[ ${DIFFS} -lt 2 ]]; then
   exit 1
 fi
 
+if ! [[ ${MAXRATIO} =~ $re ]] ; then
+  echo ""
+  echo "ERROR: The given number for the maximum diff size is not a number: ${MAXRATIO}"
+  echo ""
+  exit 1
+fi
+
+if [[ ${MAXRATIO} -lt 5 ]]; then
+  echo ""
+  echo "ERROR: The maximum diff size should be at least 5% and not ${MAXRATIO}"
+  echo ""
+  exit 1
+fi
+
+if [[ ${MAXRATIO} -gt 50 ]]; then
+  echo ""
+  echo "ERROR: The maximum diff size should be not larger than 50% and not ${MAXRATIO}"
+  echo ""
+  exit 1
+fi
+
 echo ""
-echo "Using this file name prefix:     ${BACKUPPREFIX}" 
-echo "Using this folder:               ${FOLDER}" 
-echo "Using this target directory:     ${TARGET}"
-echo "Using this number of rotations:  ${ROTATIONS}"
-echo "Using this number of diffs:      ${DIFFS}"
+echo "Using this file name prefix:                                ${BACKUPPREFIX}" 
+echo "Using this folder:                                          ${FOLDER}" 
+echo "Using this target directory:                                ${TARGET}"
+echo "Using this number of rotations:                             ${ROTATIONS}"
+echo "Using this number of diffs:                                 ${DIFFS}"
+echo "Using this maximum ratio between diff and rotation size:    ${MAXRATIO}"
 
 # For testing create a new file in the folder
 #mktemp -p ${FOLDER}
@@ -184,8 +210,16 @@ echo ""
 echo "Found maximum rotation:   ${MAXROTATION}" 
 echo "Found maximum diff:       ${MAXDIFF}"
 
+# Calculate the file size difference between the rotation and the highest diff
+RATIO=0
+if [[ ${MAXDIFF} -ge 1 ]]; then
+  SIZEROT=$(stat --printf="%s" ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz)
+  SIZEDIFF=$(stat --printf="%s" ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz)
+  RATIO=$(echo "100.0 * ${SIZEDIFF} / ${SIZEROT}" | bc )
+fi
+
 # We create a new rotation when there is none, or if we have exceeded or maximum number of diffs 
-if [[ ${MAXDIFF} -ge ${DIFFS} ]] || [[ ${MAXROTATION} -eq 0 ]]; then
+if [[ ${MAXROTATION} -eq 0 ]] || [[ ${RATIO} -gt ${MAXRATIO} ]]; then
 
   MAXROTATION=$(( MAXROTATION + 1 ))
   
@@ -211,6 +245,7 @@ if [[ ${MAXDIFF} -ge ${DIFFS} ]] || [[ ${MAXROTATION} -eq 0 ]]; then
 
 else
 # We create a new diff
+  LASTMAXDIFF=${MAXDIFF}
   MAXDIFF=$(( MAXDIFF + 1 ))
   
   echo ""
@@ -218,6 +253,32 @@ else
 
   cp ${BACKUPPREFIX}.rot${MAXROTATION}.log ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log
   tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log --use-compress-program="pigz --best --recursive" -cf ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz ${FOLDER}
+  
+  # Check if there is a change
+  if [ ${MAXDIFF} -ge 2 ]; then
+    MD5OLD=$(tar tvfz ${BACKUPPREFIX}.rot${MAXROTATION}.diff${LASTMAXDIFF}.tar.gz | md5sum)
+    MD5NEW=$(tar tvfz ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz | md5sum)
+    
+    if [[ ${MD5OLD} == ${MD5NEW} ]]; then
+      echo "No change from old diff - removing it"
+      rm ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log
+      MAXDIFF=${LASTMAXDIFF}
+    fi
+  fi
+  
+  # Delete too old diffs
+  if [ ${MAXDIFF} -gt ${DIFFS} ]; then
+    MINDIFF=$(( MAXDIFF - DIFFS + 1 ))
+    for F in `ls ${BACKUPPREFIX}.rot${MAXROTATION}.diff*.log 2>/dev/null`; do
+      D=$(echo $F | awk -F".diff" '{ print $2 }' | awk -F"." '{print $1 }' )
+      if [[ ${D} =~ $re ]] ; then
+        if [[ ${D} -lt ${MINDIFF} ]]; then
+          echo "Removing ${BACKUPPREFIX}.rot${MAXROTATION}.diff${D}"
+          rm ${BACKUPPREFIX}.rot${MAXROTATION}.diff${D}.tar.gz ${BACKUPPREFIX}.rot${MAXROTATION}.diff${D}.log
+        fi
+      fi
+    done
+  fi
 fi
 
 echo ""
