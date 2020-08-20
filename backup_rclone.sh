@@ -102,7 +102,7 @@ if [ "$?" != "0" ]; then
   exit 1 
 fi
 
-echo "INFO: Checking if the raid is mounted" 2>&1 | tee -a ${LOG}
+echo "INFO: Checking if the volume is mounted" 2>&1 | tee -a ${LOG}
 if ! grep -qs "${RAIDDIR}" /proc/mounts; then
   echo "ERROR: Raid not mounted" 2>&1 | tee -a ${LOG}
   exit 1
@@ -116,11 +116,14 @@ if [[ ${MOUNTPOINT} == "" ]]; then
   exit 1
 fi
 
-# Second, that everything is OK with it:
-echo "INFO: Checking if the raid is not degraded" 2>&1 | tee -a ${LOG}
-if grep -A1 md0 /proc/mdstat | tail -n 1 | awk '{print $NF }' | grep _ > /dev/null; then 
-  echo "ERROR: Failed disks, not syncing" 2>&1 | tee -a ${LOG}
-  exit 1
+# Second, that everything is OK with it if it is an mdadm raid:
+
+if [[ ${MOUNTPOINT} == md* ]]; then 
+  echo "INFO: Checking if the raid is not degraded" 2>&1 | tee -a ${LOG}
+  if grep -A1 ${MOUNTPOINT} /proc/mdstat | tail -n 1 | awk '{print $NF }' | grep _ > /dev/null; then 
+    echo "ERROR: Failed disks, not syncing" 2>&1 | tee -a ${LOG}
+    exit 1
+  fi
 fi
 
 echo " " 2>&1 | tee -a ${LOG} 
@@ -139,25 +142,28 @@ if [[ ${BACKUPHOMEDESTINATION} != "" ]]; then
     if [[ ${D} != *"lost+found"* ]]; then
       echo "INFO: Starting backup of ${D} @ $(date) ...  " 2>&1 | tee -a ${LOG}
       PREFIX="Backup.$(basename ${D})"
-      bash $(dirname "$0")/backup_tar.sh -p="${PREFIX}" -f="${D}" -t="${RAIDDIR}/${BACKUPHOMEDESTINATION}" -r=1 -d=20 2>&1 | tee -a ${LOG}
+      bash $(dirname "$0")/backup_tar.sh -p="${PREFIX}" -f="${D}" -t="${RAIDDIR}/${BACKUPHOMEDESTINATION}" -r=1 -d=50 2>&1 | tee -a ${LOG}
     fi
   done
 fi
 
 echo " " 2>&1 | tee -a ${LOG} 
 echo "INFO: Starting rclone @ $(date) ...  " 2>&1 | tee -a ${LOG}
-rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=64M --max-backlog 999999 sync ${RAIDDIR} ${NAME}encrypted: 2>&1 | tee -a ${LOG}
+BACKUPDIR=${NAME}encrypted:latest
+BACKUPDIFFDIR=${NAME}encrypted:latest-diff-$(date +%Y-%m-%d--%H-%M-%S)
+rclone --config ${RCLONECONFIG} mkdir ${BACKUPDIR}
+rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=64M --max-backlog 999999 --backup-dir ${BACKUPDIFFDIR} sync ${RAIDDIR} ${BACKUPDIR} 2>&1 | tee -a ${LOG}
 
 
 echo "INFO: Checking for duplicates  @ $(date) ... " 2>&1 | tee -a ${LOG}
 if grep -q "Duplicate object found" ${LOG}; then
   echo "INFO: Duplicates found and keeping only newest... " 2>&1 | tee -a ${LOG}
-  rclone --config ${RCLONECONFIG} -L --fast-list dedupe --dedupe-mode newest ${NAME}encrypted: 2>&1 | tee -a ${LOG}
+  rclone --config ${RCLONECONFIG} -L --fast-list dedupe --dedupe-mode newest ${BACKUPDIR} 2>&1 | tee -a ${LOG}
 fi
 
 
 echo "INFO: Starting to calculate size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}
-rclone --config ${RCLONECONFIG} --fast-list size ${NAME}encrypted: 2>&1 | tee -a ${LOG}
+rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR} 2>&1 | tee -a ${LOG}
 
 
 echo "INFO: Checking used local space again for comparison @ $(date) ... " 2>&1 | tee -a ${LOG}
