@@ -83,7 +83,7 @@ fi
 
 echo "INFO: Checking if this script is still running"  2>&1 | tee -a ${LOG}
 ps -efww | grep -w "[b]ackup_rclone.sh" | grep -v $$ | grep -v "sudo"
-Status=`ps -efww | grep -w "[b]ackup_rclone.sh" | grep -v $$ | grep -v "sudo" | awk -vpid=$$ '$2 != pid { print $2 }'`
+Status=`ps -efww | grep -w "[b]ackup_rclone.sh" | grep -v $$ | grep -v "sudo" | grep -v "timeout" | awk -vpid=$$ '$2 != pid { print $2 }'`
 if [ ! -z "${Status}" ]; then
   echo "ERROR: ${PROGRAMNAME} still running"  2>&1 | tee -a ${LOG}
   exit 1
