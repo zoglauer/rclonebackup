@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Since rclone can explode in memory size and take down the whole machine, limit the memory usage
+# 16 GB of memory usage
+ulimit -m 16777216
+
+
 PROGRAMNAME="backup_rclone.sh"
 
 help() {
@@ -36,6 +41,8 @@ done
 # Default options
 NAME=""
 BACKUPHOMEDESTINATION=""
+# Docker has too many small files for backup - we always need to exclude it
+EXCLUDES="docker/"
 
 # Overwrite default options with user options:
 for C in "${CMD[@]}"; do
@@ -149,10 +156,20 @@ fi
 
 echo " " 2>&1 | tee -a ${LOG} 
 echo "INFO: Starting rclone @ $(date) ...  " 2>&1 | tee -a ${LOG}
+EXCLUDE=""
+for E in ${EXCLUDES}; do
+  echo "INFO: Excluded from backup: ${E}" 2>&1 | tee -a ${LOG}
+  EXCLUDE+="--exclude ${E} "
+done
+
 BACKUPDIR=${NAME}encrypted:latest
 BACKUPDIFFDIR=${NAME}encrypted:latest-diff-$(date +%Y-%m-%d--%H-%M-%S)
+
 rclone --config ${RCLONECONFIG} mkdir ${BACKUPDIR}
-rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=64M --max-backlog 999999 --backup-dir ${BACKUPDIFFDIR} sync ${RAIDDIR} ${BACKUPDIR} 2>&1 | tee -a ${LOG}
+
+echo "INFO: rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=64M --max-backlog 999999 --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}" 2>&1 | tee -a ${LOG}
+
+rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=64M --max-backlog 999999 --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR} 2>&1 | tee -a ${LOG}
 
 echo "INFO: rclone exited with code $?" 2>&1 | tee -a ${LOG}
 
