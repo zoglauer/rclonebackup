@@ -167,9 +167,19 @@ BACKUPDIFFDIR=${NAME}encrypted:latest-diff-$(date +%Y-%m-%d--%H-%M-%S)
 
 rclone --config ${RCLONECONFIG} mkdir ${BACKUPDIR}
 
-echo "INFO: rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=64M --max-backlog 999999 --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}" 2>&1 | tee -a ${LOG}
+# 2020/11/8: Reduced --drive-chunk-size=64M to --drive-chunk-size=16M to investigate 100% CPU load
+OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=16M --max-backlog 999999 --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+# 2020/11/17: Reduced checkers to 5 and max-backlog to 10000 to investigate 100% CPU load
+OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=5 --tpslimit=10 --drive-chunk-size=16M --max-backlog 10000 --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+# 2020/11/19: Still 100% CPU - simplifying more
+OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --backup-dir     ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+# 2020/11/20: Less transfers, check first
+OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+echo "INFO: rclone options: ${OPTIONS}" 2>&1 | tee -a ${LOG}
 
-rclone --config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=64M --max-backlog 999999 --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR} 2>&1 | tee -a ${LOG}
+#time rclone --dry-run ${OPTIONS} 2>&1 | tee -a ${LOG}
+
+rclone ${OPTIONS} 2>&1 | tee -a ${LOG}
 
 echo "INFO: rclone exited with code $?" 2>&1 | tee -a ${LOG}
 
