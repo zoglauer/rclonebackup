@@ -125,13 +125,13 @@ fi
 
 # Second, that everything is OK with it if it is an mdadm raid:
 
-if [[ ${MOUNTPOINT} == md* ]]; then 
-  echo "INFO: Checking if the raid is not degraded" 2>&1 | tee -a ${LOG}
-  if grep -A1 ${MOUNTPOINT} /proc/mdstat | tail -n 1 | awk '{print $NF }' | grep _ > /dev/null; then 
-    echo "ERROR: Failed disks, not syncing" 2>&1 | tee -a ${LOG}
-    exit 1
-  fi
-fi
+#if [[ ${MOUNTPOINT} == md* ]]; then 
+#  echo "INFO: Checking if the raid is not degraded" 2>&1 | tee -a ${LOG}
+#  if grep -A1 ${MOUNTPOINT} /proc/mdstat | tail -n 1 | awk '{print $NF }' | grep _ > /dev/null; then 
+#    echo "ERROR: Failed disks, not syncing" 2>&1 | tee -a ${LOG}
+#    exit 1
+#  fi
+#fi
 
 echo " " 2>&1 | tee -a ${LOG} 
 echo "INFO: All tests passed! " 2>&1 | tee -a ${LOG}
