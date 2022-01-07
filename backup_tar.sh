@@ -41,7 +41,7 @@ FOLDER="NONE____NONE"
 TARGET="NONE____NONE"
 ROTATIONS=2
 DIFFS=5
-MAXRATIO=10
+MAXRATIO=5
 
 # Overwrite default options with user options:
 for C in "${CMD[@]}"; do
@@ -219,7 +219,7 @@ if [[ ${MAXDIFF} -ge 1 ]]; then
 fi
 
 # We create a new rotation when there is none, or if we have exceeded or maximum number of diffs 
-if [[ ${MAXROTATION} -eq 0 ]] || [[ ${RATIO} -gt ${MAXRATIO} ]]; then
+if [[ ${MAXROTATION} -eq 0 ]] || [[ ${RATIO} -gt ${MAXRATIO} ]] || [[ ${MAXROTATION} -ge 100 ]]; then
 
   MAXROTATION=$(( MAXROTATION + 1 ))
   
