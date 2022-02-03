@@ -218,6 +218,25 @@ if [[ ${MAXDIFF} -ge 1 ]]; then
   RATIO=$(echo "100.0 * ${SIZEDIFF} / ${SIZEROT}" | bc )
 fi
 
+
+# Find recently changed virtualbox files:
+EXCLUDE=""
+MAXTIME=300
+readarray -t files <<<"$( find "${FOLDER}" -type f -name '*.vdi' -print )"
+for file in "${files[@]}"; do 
+  printf '%s\n' "$file"; 
+  if [ $(expr $(date +%s) - $( stat "$file" -c %Y ) ) -le ${MAXTIME} ]; then 
+    echo "Open!"; EXCLUDE=" --exclude='$file'"; 
+  else 
+    echo "Closed"; 
+  fi; 
+done;
+
+echo ""
+echo "List of excluded files:"
+echo "${EXCLUDE}"
+
+
 # We create a new rotation when there is none, or if we have exceeded or maximum number of diffs 
 if [[ ${MAXROTATION} -eq 0 ]] || [[ ${RATIO} -gt ${MAXRATIO} ]] || [[ ${MAXROTATION} -ge 100 ]]; then
 
@@ -226,7 +245,7 @@ if [[ ${MAXROTATION} -eq 0 ]] || [[ ${RATIO} -gt ${MAXRATIO} ]] || [[ ${MAXROTAT
   echo ""
   echo "Creating new rotation with ID ${MAXROTATION}"
   
-  tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.log --use-compress-program="pigz --best --recursive" -cf ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz ${FOLDER}
+  tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.log --use-compress-program="pigz --best --recursive" ${EXCLUDE} -cf ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz ${FOLDER}
   
   if [[ $? -ne 0 ]]; then
     echo "ERROR: tar exited with an error code -- not deleting anything"
@@ -252,7 +271,7 @@ else
   echo "Creating new diff ID ${MAXDIFF} for rotation ${MAXROTATION}"
 
   cp ${BACKUPPREFIX}.rot${MAXROTATION}.log ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log
-  tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log --use-compress-program="pigz --best --recursive" -cf ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz ${FOLDER}
+  tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log --use-compress-program="pigz --best --recursive" ${EXCLUDE} -cf ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz ${FOLDER}
   
   # Check if there is a change
   if [ ${MAXDIFF} -ge 2 ]; then
