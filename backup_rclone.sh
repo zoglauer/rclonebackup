@@ -110,12 +110,17 @@ if [ "$?" != "0" ]; then
 fi
 
 echo "INFO: Checking if the volume is mounted" 2>&1 | tee -a ${LOG}
-if ! grep -qs "${RAIDDIR}" /proc/mounts; then
+if [[ $(grep ${RAIDDIR} /proc/mounts) == "" ]]; then
   echo "ERROR: Raid not mounted" 2>&1 | tee -a ${LOG}
   exit 1
 fi
 
-MOUNTPOINT=$(findmnt -n -o SOURCE --target "${RAIDDIR}")
+echo "INFO: Finding mount point" 2>&1 | tee -a ${LOG}
+MOUNTPOINT=$(findmnt -n -o SOURCE --target "${RAIDDIR}" | grep /dev/md | head -1)
+if [[ ${MOUNTPOINT} == "" ]]; then
+  echo "ERROR: Mount point not found" 2>&1 | tee -a ${LOG}
+  exit 1
+fi
 MOUNTPOINT=$(basename ${MOUNTPOINT})
 
 if [[ ${MOUNTPOINT} == "" ]]; then
