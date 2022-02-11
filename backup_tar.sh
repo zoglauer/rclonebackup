@@ -4,7 +4,7 @@
 PROGRAMNAME="backup_tar.sh"
 
 echo ""
-echo "Launching ${PROGRAMNAME}"
+echo "INFO: Launching tar-based backup"
 
 help() {
   echo ""
@@ -15,8 +15,8 @@ help() {
   echo ""
   echo "Options:"
   echo "  --prefix=[name]: The prefix for the backup file name (default: Backup)"
-  echo "  --folder=[name]: The name of the directory to backup"
-  echo "  --target=[name]: The distination where to store the backup"
+  echo "  --folder=[name]: The directory which to backup"
+  echo "  --archive=[name]: The directory where to store the backup"
   echo "  --rotations=[number]: The number of rotations to keep (minimum 2, default 2)"
   echo "  --diffs=[number]: The number of diffs to keep (minimum 2, default 5)"
   echo "  --maxratio=[percent]: The maximum size in percent a diff can of a rotation, before we start a new rotation (minium 5, maximum 50, default 10)"
@@ -38,7 +38,7 @@ done
 # Default options:
 BACKUPPREFIX="Backup"
 FOLDER="NONE____NONE"
-TARGET="NONE____NONE"
+ARCHIVE="NONE____NONE"
 ROTATIONS=2
 DIFFS=5
 MAXRATIO=5
@@ -49,8 +49,8 @@ for C in "${CMD[@]}"; do
     FOLDER=`echo ${C} | awk -F"=" '{ print $2 }'`
   elif [[ ${C} == *-p*=* ]]; then
     BACKUPPREFIX=`echo ${C} | awk -F"=" '{ print $2 }'`
-  elif [[ ${C} == *-t*=* ]]; then
-    TARGET=`echo ${C} | awk -F"=" '{ print $2 }'`
+  elif [[ ${C} == *-a*=* ]]; then
+    ARCHIVE=`echo ${C} | awk -F"=" '{ print $2 }'`
   elif [[ ${C} == *-r*=* ]]; then
     ROTATIONS=`echo ${C} | awk -F"=" '{ print $2 }'`
   elif [[ ${C} == *-d*=* ]]; then
@@ -95,25 +95,25 @@ if [[ ! -d ${FOLDER} ]]; then
   exit 1
 fi
 
-if [[ ${TARGET} == "NONE____NONE" ]]; then
+if [[ ${ARCHIVE} == "NONE____NONE" ]]; then
   echo ""
-  echo "ERROR: You need to give a target directory where to store the backup"
-  echo ""
-  exit 1
-fi
-
-TARGET="${TARGET/#\~/$HOME}"
-TARGET=$(realpath ${TARGET})
-if [[ ! -d ${TARGET} ]]; then
-  echo ""
-  echo "ERROR: The directory where to store the backup does not exist: ${TARGET}"
+  echo "ERROR: You need to give a ARCHIVE directory where to store the backup"
   echo ""
   exit 1
 fi
 
-if [[ ${TARGET} == ${FOLDER}* ]]; then
+ARCHIVE="${ARCHIVE/#\~/$HOME}"
+ARCHIVE=$(realpath ${ARCHIVE})
+if [[ ! -d ${ARCHIVE} ]]; then
   echo ""
-  echo "ERROR: The target directory cannot be in the path of the folder directory"
+  echo "ERROR: The directory where to store the backup does not exist: ${ARCHIVE}"
+  echo ""
+  exit 1
+fi
+
+if [[ ${ARCHIVE} == ${FOLDER}* ]]; then
+  echo ""
+  echo "ERROR: The ARCHIVE directory cannot be in the path of the folder directory"
   echo ""
   exit 1
 fi
@@ -169,23 +169,27 @@ if [[ ${MAXRATIO} -gt 50 ]]; then
 fi
 
 echo ""
-echo "Using this file name prefix:                                ${BACKUPPREFIX}" 
-echo "Using this folder:                                          ${FOLDER}" 
-echo "Using this target directory:                                ${TARGET}"
-echo "Using this number of rotations:                             ${ROTATIONS}"
-echo "Using this number of diffs:                                 ${DIFFS}"
-echo "Using this maximum ratio between diff and rotation size:    ${MAXRATIO}"
+echo "INFO: Using this file name prefix:                                ${BACKUPPREFIX}" 
+echo "INFO: Using this folder:                                          ${FOLDER}" 
+echo "INFO: Using this archive directory:                               ${ARCHIVE}"
+echo "INFO: Using this number of rotations:                             ${ROTATIONS}"
+echo "INFO: Using this number of diffs:                                 ${DIFFS}"
+echo "INFO: Using this maximum ratio between diff and rotation size:    ${MAXRATIO}"
+echo ""
 
 # For testing create a new file in the folder
 #mktemp -p ${FOLDER}
 
 # Now do the actual backup
+BACKUPPREFIX=${ARCHIVE}/${BACKUPPREFIX}
 
-cd ${TARGET}
+echo "INFO: Swicthing to directory ${FOLDER}"
+echo ""
+cd ${FOLDER}
 
 # Find the highest rotation
 MAXROTATION="0"
-for F in `ls ${BACKUPPREFIX}.* 2>/dev/null`; do
+for F in `ls ${BACKUPPREFIX}.rot*.tar.gz 2>/dev/null`; do
   R=$(echo $F | awk -F".rot" '{ print $2 }' | awk -F"." '{print $1 }' )
   if [[ ${R} =~ $re ]] ; then
     if [[ ${R} -gt ${MAXROTATION} ]]; then
@@ -197,7 +201,7 @@ done
 
 # Find the highest diff
 MAXDIFF="0"
-for F in `ls ${BACKUPPREFIX}.rot${MAXROTATION}.* 2>/dev/null`; do
+for F in `ls ${BACKUPPREFIX}.rot${MAXROTATION}.diff*.tar.gz 2>/dev/null`; do
   D=$(echo $F | awk -F".diff" '{ print $2 }' | awk -F"." '{print $1 }' )
   if [[ ${D} =~ $re ]] ; then
     if [[ ${D} -gt ${MAXDIFF} ]]; then
@@ -206,9 +210,9 @@ for F in `ls ${BACKUPPREFIX}.rot${MAXROTATION}.* 2>/dev/null`; do
   fi
 done
 
+echo "INFO: Found maximum rotation:   ${MAXROTATION}" 
+echo "INFO: Found maximum diff:       ${MAXDIFF}"
 echo ""
-echo "Found maximum rotation:   ${MAXROTATION}" 
-echo "Found maximum diff:       ${MAXDIFF}"
 
 # Calculate the file size difference between the rotation and the highest diff
 RATIO=0
@@ -222,44 +226,55 @@ fi
 # Find recently changed virtualbox files:
 EXCLUDE=""
 MAXTIME=300
-readarray -t files <<<"$( find "${FOLDER}" -type f -name '*.vdi' -print )"
-for file in "${files[@]}"; do 
-  printf '%s\n' "$file"; 
-  if [ $(expr $(date +%s) - $( stat "$file" -c %Y ) ) -le ${MAXTIME} ]; then 
-    echo "Open!"; EXCLUDE=" --exclude='$file'"; 
-  else 
-    echo "Closed"; 
-  fi; 
-done;
 
-echo ""
-echo "List of excluded files:"
-echo "${EXCLUDE}"
+readarray -t files <<<"$( find "${FOLDER}" -type f -name '*.vdi' -exec realpath --relative-to "${FOLDER}" {} \; )"
 
+if [ ${#files[@]} -gt 0 ]; then
+  if [[ ${files[0]} != "" ]]; then  # no file found fills first with empty  
+    for file in "${files[@]}"; do 
+      if [ $(expr $(date +%s) - $( stat "${FOLDER}/${file}" -c %Y ) ) -le ${MAXTIME} ]; then 
+        echo "WARNING: This file is open and will likely not be stored correctly: ${FOLDER}/${file}"; EXCLUDE=" --exclude='${file}'"; 
+      fi; 
+    done;
+  fi
+fi
 
 # We create a new rotation when there is none, or if we have exceeded or maximum number of diffs 
+TARERROR="FALSE"
 if [[ ${MAXROTATION} -eq 0 ]] || [[ ${RATIO} -gt ${MAXRATIO} ]] || [[ ${MAXROTATION} -ge 100 ]]; then
 
   MAXROTATION=$(( MAXROTATION + 1 ))
   
   echo ""
-  echo "Creating new rotation with ID ${MAXROTATION}"
+  echo "INFO: Creating new rotation with ID ${MAXROTATION}"
   
-  tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.log --use-compress-program="pigz --best --recursive" ${EXCLUDE} -cf ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz ${FOLDER}
+  #COMMAND="tar ${EXCLUDE} --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.log --use-compress-program='pigz --best --recursive' -cf ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz ${EXCLUDE} ."
+  COMMAND="tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.log --use-compress-program=pigz -cf ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz ."
+  echo " "
+  echo "INFO: Executing: ${COMMAND}"
+  echo ""
+  ANSWER=$(${COMMAND} 2>&1)
   
-  if [[ $? -ne 0 ]]; then
-    echo "ERROR: tar exited with an error code -- not deleting anything"
+  if [[ $? -eq 0 ]]; then
+    TARERROR="FALSE"
+    echo "INFO: Success"
+    echo "" 
+  elif [[ $? -eq 1 ]]; then
+    TARERROR="FALSE"
+    echo "WARNING: Some files changed during tar creation, those will be in undetermined state."
+    echo ""
+    echo "--- tar output ---"
+    echo "${ANSWER}"
+    echo "------------------"
+    echo ""
   else
-    # Delete everything before the minimum rotation
-    MINROTATION=$(( MAXROTATION - ROTATIONS ))
-    for F in `ls ${BACKUPPREFIX}.*`; do
-      R=$(echo $F | awk -F".rot" '{ print $2 }' | awk -F"." '{print $1 }' )
-      if [[ ${R} =~ $re ]] ; then
-        if [[ ${R} -le ${MINROTATION} ]]; then
-          rm ${F}
-        fi
-      fi
-    done
+    TARERROR="TRUE"
+    echo "ERROR: tar exited with an error code -- not deleting anything"
+    echo ""
+    echo "--- tar output ---"
+    echo "${ANSWER}"
+    echo "------------------"
+    echo ""
   fi
 
 else
@@ -268,40 +283,95 @@ else
   MAXDIFF=$(( MAXDIFF + 1 ))
   
   echo ""
-  echo "Creating new diff ID ${MAXDIFF} for rotation ${MAXROTATION}"
+  echo "INFO: Creating new diff ID ${MAXDIFF} for rotation ${MAXROTATION}"
 
   cp ${BACKUPPREFIX}.rot${MAXROTATION}.log ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log
-  tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log --use-compress-program="pigz --best --recursive" ${EXCLUDE} -cf ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz ${FOLDER}
   
+  COMMAND="tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log --use-compress-program=pigz -cf ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz ."
+  echo " "
+  echo "INFO: Executing: ${COMMAND}"
+  echo ""
+  ANSWER=$(${COMMAND} 2>&1)
+  
+  if [[ $? -eq 0 ]]; then
+    TARERROR="FALSE"
+    echo "INFO: Success"
+    echo "" 
+  elif [[ $? -eq 1 ]]; then
+    TARERROR="FALSE"
+    echo "WARNING: Some files changed during tar creation, those will be in undetermined state."
+    echo ""
+    echo "--- tar output ---"
+    echo "${ANSWER}"
+    echo "------------------"
+    echo ""
+  else
+    TARERROR="TRUE"
+    echo "ERROR: tar exited with an error code -- not deleting anything"
+    echo ""
+    echo "--- tar output ---"
+    echo "${ANSWER}"
+    echo "------------------"
+    echo ""
+  fi
+    
   # Check if there is a change
   if [ ${MAXDIFF} -ge 2 ]; then
-    MD5OLD=$(tar tvfz ${BACKUPPREFIX}.rot${MAXROTATION}.diff${LASTMAXDIFF}.tar.gz | md5sum)
-    MD5NEW=$(tar tvfz ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz | md5sum)
-    
+    echo "INFO: Checking if there is a difference to the previous diff"
+    MD5OLD=$(tar tfz ${BACKUPPREFIX}.rot${MAXROTATION}.diff${LASTMAXDIFF}.tar.gz | md5sum)
+    if [[ $? -ne 0 ]]; then
+      echo "ERROR: Unable to calculate checksum for ${BACKUPPREFIX}.rot${MAXROTATION}.diff${LASTMAXDIFF}.tar.gz"
+    fi
+    MD5NEW=$(tar tfz ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz | md5sum)
+    if [[ $? -ne 0 ]]; then
+      echo "ERROR: Unable to calculate checksum for ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz"
+    fi
+        
     if [[ ${MD5OLD} == ${MD5NEW} ]]; then
-      echo "No change from old diff - removing it"
+      echo "INFO: No change from previous diff ID ${LASTMAXDIFF}. Removing the new diff ID ${MAXDIFF}"
       rm ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.log
       MAXDIFF=${LASTMAXDIFF}
     fi
   fi
   
+fi
+
+# Check for deletes:
+if [[ ${TARERROR} == "FALSE" ]]; then
+  # Delete everything before the minimum rotation
+  echo "INFO: Checking if we can delete old rotations"
+  MINROTATION=$(( MAXROTATION - ROTATIONS ))
+  for F in `ls ${BACKUPPREFIX}.*`; do
+    R=$(echo $F | awk -F".rot" '{ print $2 }' | awk -F"." '{print $1 }' )
+    if [[ ${R} =~ $re ]] ; then
+      if [[ ${R} -le ${MINROTATION} ]]; then
+        echo "INFO: Removing rotation ${F}"
+        rm ${F}
+      fi
+    fi
+  done
+  
   # Delete too old diffs
+  echo "INFO: Checking if we can delete old diffs"
   if [ ${MAXDIFF} -gt ${DIFFS} ]; then
     MINDIFF=$(( MAXDIFF - DIFFS + 1 ))
     for F in `ls ${BACKUPPREFIX}.rot${MAXROTATION}.diff*.log 2>/dev/null`; do
       D=$(echo $F | awk -F".diff" '{ print $2 }' | awk -F"." '{print $1 }' )
       if [[ ${D} =~ $re ]] ; then
         if [[ ${D} -lt ${MINDIFF} ]]; then
-          echo "Removing ${BACKUPPREFIX}.rot${MAXROTATION}.diff${D}"
+          echo "INFO: Removing diff ${BACKUPPREFIX}.rot${MAXROTATION}.diff${D}"
           rm ${BACKUPPREFIX}.rot${MAXROTATION}.diff${D}.tar.gz ${BACKUPPREFIX}.rot${MAXROTATION}.diff${D}.log
         fi
       fi
     done
-  fi
+  fi  
+else 
+  echo "WARNING: Not deleting any files due to errors during tar"
 fi
 
 echo ""
-echo "Done"
-
+echo "DONE"
+echo ""
+echo ""
 
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Since rclone can explode in memory size and take down the whole machine, limit the memory usage
+# Since rclone can explode in memory size and take down the whole machine, limit the memory usage to
 # 16 GB of memory usage
 ulimit -m 16777216
 
@@ -15,8 +15,8 @@ help() {
   echo "Usage: bash ${PROGRAMNAME} [options]";
   echo ""
   echo "Options:"
-  echo "  --name=[name]: The name of the directory to clone"
-  echo "  --backuphomes=[destination]: If set backup the home directories to [destination], which needs to be on the raid (top level)"
+  echo "  --name=[name]: The name of the raid to clone -- it  is assumed it mounted under /volumes"
+  echo "  --backuphomes=[destination]: If set, backup all home directories to [destination], which needs to be on the raid (top level)"
   echo ""
   echo "Assumptions:"
   echo "(1) rclone is installed"
@@ -149,7 +149,7 @@ if [[ ${BACKUPHOMEDESTINATION} != "" ]]; then
     if [[ ${D} != *"lost+found"* ]]; then
       echo "INFO: Starting backup of ${D} @ $(date) ...  " 2>&1 | tee -a ${LOG}
       PREFIX="Backup.$(basename ${D})"
-      bash $(dirname "$0")/backup_tar.sh -p="${PREFIX}" -f="${D}" -t="${RAIDDIR}/${BACKUPHOMEDESTINATION}" -r=1 -d=5 2>&1 | tee -a ${LOG}
+      bash $(dirname "$0")/backup_tar.sh -p="${PREFIX}" -f="${D}" -a="${RAIDDIR}/${BACKUPHOMEDESTINATION}" -r=1 -d=5 2>&1 | tee -a ${LOG}
     fi
   done
 fi
