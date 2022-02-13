@@ -17,6 +17,9 @@ help() {
   echo "Options:"
   echo "  --name=[name]: The name of the raid to clone -- it  is assumed it mounted under /volumes"
   echo "  --backuphomes=[destination]: If set, backup all home directories to [destination], which needs to be on the raid (top level)"
+  echo "  --timeout=[hours]: Set a timeout in hours, default is 22 hours"
+  echo "  --do-size-check / --no-size-check: Check for remote size"
+  echo "  --verbose: Verbose output"
   echo ""
   echo "Assumptions:"
   echo "(1) rclone is installed"
@@ -41,7 +44,10 @@ done
 # Default options
 NAME=""
 BACKUPHOMEDESTINATION=""
-# Docker has too many small files for backup - we always need to exclude it
+TIMEOUT=21
+SIZECHECK="TRUE"
+VERBOSE="FALSE"
+# Docker has too many small files for backup to gogole drive -- we always need to exclude it
 EXCLUDES="docker/"
 
 # Overwrite default options with user options:
@@ -50,6 +56,14 @@ for C in "${CMD[@]}"; do
     NAME=`echo ${C} | awk -F"=" '{ print $2 }'`
   elif [[ ${C} == *-b*=* ]]; then
     BACKUPHOMEDESTINATION=`echo ${C} | awk -F"=" '{ print $2 }'`
+  elif [[ ${C} == *-t*=* ]]; then
+    TIMEOUT=`echo ${C} | awk -F"=" '{ print $2 }'`
+  elif [[ ${C} == *-do-size-c* ]]; then
+    SIZECHECK="TRUE"
+  elif [[ ${C} == *-v* ]]; then
+    VERBOSE="TRUE"
+  elif [[ ${C} == *-no-size-c* ]]; then
+    SIZECHECK="FALSE"
   elif [[ ${C} == *-h* ]]; then
     echo ""
     help
@@ -69,6 +83,13 @@ LOG="/tmp/Backup_$(basename ${RAIDDIR})_$(date +%Y%m%d_%H%M%S).log"
 # We do not want to sync if we are not mounted or have any other problem -- since that might remove all remote data
 
 echo "INFO: Started backup script for ${NAME} @ $(date)" 2>&1 | tee -a ${LOG}
+
+if [[ ${TIMEOUT} -ge 2 ]]; then
+  echo "INFO: Timeout for rclone: ${TIMEOUT} hours" 2>&1 | tee -a ${LOG}
+else 
+  TIMEOUT="21"
+  echo "WARNING: Timeout for rclone needs to be 2 hours at a minimum. Using the default, ${TIMEOUT} hours." 2>&1 | tee -a ${LOG}
+fi
 
 echo "INFO: Checking if we have a good name" 2>&1 | tee -a ${LOG}
 if [[ ${NAME} == "" ]]; then
@@ -160,7 +181,7 @@ if [[ ${BACKUPHOMEDESTINATION} != "" ]]; then
 fi
 
 echo " " 2>&1 | tee -a ${LOG} 
-echo "INFO: Starting rclone @ $(date) ...  " 2>&1 | tee -a ${LOG}
+echo "INFO: Starting backup @ $(date) ...  " 2>&1 | tee -a ${LOG}
 EXCLUDE=""
 for E in ${EXCLUDES}; do
   echo "INFO: Excluded from backup: ${E}" 2>&1 | tee -a ${LOG}
@@ -170,7 +191,19 @@ done
 BACKUPDIR=${NAME}encrypted:latest
 BACKUPDIFFDIR=${NAME}encrypted:latest-diff-$(date +%Y-%m-%d--%H-%M-%S)
 
+# In case the directory does not exist make it, otheriwse this does nothing
 rclone --config ${RCLONECONFIG} mkdir ${BACKUPDIR}
+
+# Check size before
+if [[ ${SIZECHECK} == "TRUE" ]]; then
+  echo "INFO: Starting to calculate initial size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}
+  SIZEBEFOREORIG=$(rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
+  echo "OUTPUT: ${SIZEBEFOREORIG}" 2>&1 | tee -a ${LOG}
+  SIZEBEFORE=$(echo "${SIZEBEFOREORIG}" | awk -F\( '{print $2}' | awk -FBytes '{ print $1 }' | tail -1)
+  echo "INFO: Size of remote directory before rclone: ${SIZEBEFORE}" 2>&1 | tee -a ${LOG}
+else
+  echo "INFO: Not performing any size checks" 2>&1 | tee -a ${LOG}
+fi
 
 # 2020/11/8: Reduced --drive-chunk-size=64M to --drive-chunk-size=16M to investigate 100% CPU load
 OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=16M --max-backlog 999999 --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
@@ -180,13 +213,19 @@ OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --s
 OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --backup-dir     ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 # 2020/11/20: Less transfers, check first
 OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+# 2022/2/11: Multi-line stats
+OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m -L --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+if [[ ${VERBOSE} == "FALSE" ]]; then
+  OPTIONS="--stats-one-line ${OPTIONS}"
+fi
 echo "INFO: rclone options: ${OPTIONS}" 2>&1 | tee -a ${LOG}
 
 #time rclone --dry-run ${OPTIONS} 2>&1 | tee -a ${LOG}
 
-rclone ${OPTIONS} 2>&1 | tee -a ${LOG}
+echo "INFO: Starting rclone @ $(date) ... " 2>&1 | tee -a ${LOG}
+timeout ${TIMEOUT}h rclone ${OPTIONS} 2>&1 | tee -a ${LOG}
 
-echo "INFO: rclone exited with code $?" 2>&1 | tee -a ${LOG}
+echo "INFO: rclone exited with code $? @ $(date)" 2>&1 | tee -a ${LOG}
 
 
 echo "INFO: Checking for duplicates  @ $(date) ... " 2>&1 | tee -a ${LOG}
@@ -195,10 +234,15 @@ if grep -q "Duplicate object found" ${LOG}; then
   rclone --config ${RCLONECONFIG} -L --fast-list dedupe --dedupe-mode newest ${BACKUPDIR} 2>&1 | tee -a ${LOG}
 fi
 
-
-echo "INFO: Starting to calculate size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}
-rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR} 2>&1 | tee -a ${LOG}
-
+if [[ ${SIZECHECK} == "TRUE" ]]; then
+  echo "INFO: Starting to calculate final size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}  
+  SIZEAFTERORIG=$(rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
+  echo "OUTPUT: ${SIZEAFTERORIG}" 2>&1 | tee -a ${LOG}
+  SIZEAFTER=$(echo "${SIZEAFTERORIG}" | awk -F\( '{print $2}' | awk -FBytes '{ print $1 }' | tail -1)
+  echo "INFO: Size of remote directory after rclone: ${SIZEAFTER}" 2>&1 | tee -a ${LOG}
+  DIFFERENCE=$(echo "$SIZEAFTER $SIZEBEFORE" | awk '{ byte =($1 - $2)/1024/1024/1024; print byte " GB" }')
+  echo "INFO: Size difference: ${DIFFERENCE}" 2>&1 | tee -a ${LOG}
+fi
 
 echo "INFO: Checking used local space again for comparison @ $(date) ... " 2>&1 | tee -a ${LOG}
 du -s -B1 ${RAIDDIR}/. 2>&1 | tee -a ${LOG}

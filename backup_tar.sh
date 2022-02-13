@@ -183,7 +183,7 @@ echo ""
 # Now do the actual backup
 BACKUPPREFIX=${ARCHIVE}/${BACKUPPREFIX}
 
-echo "INFO: Swicthing to directory ${FOLDER}"
+echo "INFO: Switching to directory ${FOLDER}"
 echo ""
 cd ${FOLDER}
 
@@ -370,7 +370,7 @@ else
 fi
 
 echo ""
-echo "DONE"
+echo "INFO: DONE"
 echo ""
 echo ""
 
