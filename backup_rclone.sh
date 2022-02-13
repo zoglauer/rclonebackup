@@ -137,10 +137,15 @@ if [[ $(grep ${RAIDDIR} /proc/mounts) == "" ]]; then
 fi
 
 echo "INFO: Finding mount point" 2>&1 | tee -a ${LOG}
+# mdadm/ext4
 MOUNTPOINT=$(findmnt -n -o SOURCE --target "${RAIDDIR}" | grep /dev/md | head -1)
 if [[ ${MOUNTPOINT} == "" ]]; then
-  echo "ERROR: Mount point not found" 2>&1 | tee -a ${LOG}
-  exit 1
+  # zfs
+  MOUNTPOINT=$(findmnt -n -o SOURCE | grep ${NAME})
+  if [[ ${MOUNTPOINT} == "" ]]; then
+    echo "ERROR: Mount point not found" 2>&1 | tee -a ${LOG}
+    exit 1
+  fi
 fi
 MOUNTPOINT=$(basename ${MOUNTPOINT})
 
