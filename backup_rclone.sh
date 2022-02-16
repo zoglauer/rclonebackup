@@ -83,6 +83,7 @@ LOG="/tmp/Backup_$(basename ${RAIDDIR})_$(date +%Y%m%d_%H%M%S).log"
 # We do not want to sync if we are not mounted or have any other problem -- since that might remove all remote data
 
 echo "INFO: Started backup script for ${NAME} @ $(date)" 2>&1 | tee -a ${LOG}
+echo " " 2>&1 | tee -a ${LOG}
 
 if [[ ${TIMEOUT} -ge 2 ]]; then
   echo "INFO: Timeout for rclone: ${TIMEOUT} hours" 2>&1 | tee -a ${LOG}
@@ -91,13 +92,13 @@ else
   echo "WARNING: Timeout for rclone needs to be 2 hours at a minimum. Using the default, ${TIMEOUT} hours." 2>&1 | tee -a ${LOG}
 fi
 
-echo "INFO: Checking if we have a good name" 2>&1 | tee -a ${LOG}
+echo "INFO: Checking if we got a name of a raid" 2>&1 | tee -a ${LOG}
 if [[ ${NAME} == "" ]]; then
   echo "ERROR: You need to provide a directory name at the command line" 2>&1 | tee -a ${LOG}
   exit 1
 fi
 
-echo "INFO: Checking if the raid directory exists:" 2>&1 | tee -a ${LOG}
+echo "INFO: Checking if the raid directory exists" 2>&1 | tee -a ${LOG}
 if [ ! -d ${RAIDDIR} ]; then
   echo "ERROR: The raid director ${RAIDDIR} does not exist" 2>&1 | tee -a ${LOG}
   exit 1
@@ -110,9 +111,10 @@ if [ ! -f ${RCLONECONFIG} ]; then
 fi
 
 echo "INFO: Checking if this script is still running"  2>&1 | tee -a ${LOG}
-ps -efww | grep -w "[b]ackup_rclone.sh" | grep -v $$ | grep -v "sudo"
-Status=`ps -efww | grep -w "[b]ackup_rclone.sh" | grep -v $$ | grep -v "sudo" | grep -v "timeout" | awk -vpid=$$ '$2 != pid { print $2 }'`
-if [ ! -z "${Status}" ]; then
+#ps -efww | grep -w "[b]ackup_rclone.sh" | grep -v $$ | grep -v "sudo"
+#Status=`ps -efww | grep -w "[b]ackup_rclone.sh" | grep -v $$ | grep -v "sudo" | grep -v "timeout" | awk -vpid=$$ '$2 != pid { print $2 }'`
+STATUS=$(ps -efww | grep -w -E "root.*backup_rclone.sh" | grep -v "grep" | grep -v "sudo" | grep -v "timeout" | grep -v $$)
+if [[ ${STATUS} != "" ]]; then
   echo "ERROR: ${PROGRAMNAME} still running"  2>&1 | tee -a ${LOG}
   exit 1
 fi
@@ -121,13 +123,6 @@ echo "INFO: Checking if rclone is still running"  2>&1 | tee -a ${LOG}
 if [[ $(ps -Af | grep "[ ]rclone") != "" ]]; then
   echo "ERROR: rclone still running"  2>&1 | tee -a ${LOG}
   exit 1
-fi
-
-echo "INFO: Running \"du\" to trigger any failures" 2>&1 | tee -a ${LOG}
-du -s ${RAIDDIR}/${USERDIR} 2>&1 | tee -a ${LOG}
-if [ "$?" != "0" ]; then
-  echo "ERROR: Unable to read directory size via du" 2>&1 | tee -a ${LOG}
-  exit 1 
 fi
 
 echo "INFO: Checking if the volume is mounted" 2>&1 | tee -a ${LOG}
@@ -164,6 +159,14 @@ fi
 #  fi
 #fi
 
+echo "INFO: Running \"du\" to trigger any failures" 2>&1 | tee -a ${LOG}
+du -s ${RAIDDIR}/${USERDIR} 2>&1 > /dev/null
+if [ "$?" != "0" ]; then
+    echo "ERROR: Unable to read directory size via du" 2>&1 | tee -a ${LOG}
+      exit 1
+fi
+
+
 echo " " 2>&1 | tee -a ${LOG} 
 echo "INFO: All tests passed! " 2>&1 | tee -a ${LOG}
 
@@ -186,12 +189,13 @@ if [[ ${BACKUPHOMEDESTINATION} != "" ]]; then
 fi
 
 echo " " 2>&1 | tee -a ${LOG} 
-echo "INFO: Starting backup @ $(date) ...  " 2>&1 | tee -a ${LOG}
+#echo "INFO: Starting backup @ $(date) ...  " 2>&1 | tee -a ${LOG}
 EXCLUDE=""
 for E in ${EXCLUDES}; do
   echo "INFO: Excluded from backup: ${E}" 2>&1 | tee -a ${LOG}
   EXCLUDE+="--exclude ${E} "
 done
+echo " " 2>&1 | tee -a ${LOG}
 
 BACKUPDIR=${NAME}encrypted:latest
 BACKUPDIFFDIR=${NAME}encrypted:latest-diff-$(date +%Y-%m-%d--%H-%M-%S)
@@ -204,11 +208,12 @@ if [[ ${SIZECHECK} == "TRUE" ]]; then
   echo "INFO: Starting to calculate initial size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}
   SIZEBEFOREORIG=$(rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
   echo "OUTPUT: ${SIZEBEFOREORIG}" 2>&1 | tee -a ${LOG}
-  SIZEBEFORE=$(echo "${SIZEBEFOREORIG}" | awk -F\( '{print $2}' | awk -FBytes '{ print $1 }' | tail -1)
+  SIZEBEFORE=$(echo "${SIZEBEFOREORIG}" | awk -F\( '{print $2}' | awk -FByte '{ print $1 }' | tail -1)
   echo "INFO: Size of remote directory before rclone: ${SIZEBEFORE}" 2>&1 | tee -a ${LOG}
 else
   echo "INFO: Not performing any size checks" 2>&1 | tee -a ${LOG}
 fi
+echo " " 2>&1 | tee -a ${LOG}
 
 # 2020/11/8: Reduced --drive-chunk-size=64M to --drive-chunk-size=16M to investigate 100% CPU load
 OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --stats-one-line -L --fast-list --transfers=5 --checkers=40 --tpslimit=10 --drive-chunk-size=16M --max-backlog 999999 --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
@@ -224,6 +229,7 @@ if [[ ${VERBOSE} == "FALSE" ]]; then
   OPTIONS="--stats-one-line ${OPTIONS}"
 fi
 echo "INFO: rclone options: ${OPTIONS}" 2>&1 | tee -a ${LOG}
+echo " " 2>&1 | tee -a ${LOG}
 
 #time rclone --dry-run ${OPTIONS} 2>&1 | tee -a ${LOG}
 
@@ -231,26 +237,27 @@ echo "INFO: Starting rclone @ $(date) ... " 2>&1 | tee -a ${LOG}
 timeout ${TIMEOUT}h rclone ${OPTIONS} 2>&1 | tee -a ${LOG}
 
 echo "INFO: rclone exited with code $? @ $(date)" 2>&1 | tee -a ${LOG}
-
+echo " " 2>&1 | tee -a ${LOG}
 
 echo "INFO: Checking for duplicates  @ $(date) ... " 2>&1 | tee -a ${LOG}
 if grep -q "Duplicate object found" ${LOG}; then
   echo "INFO: Duplicates found and keeping only newest... " 2>&1 | tee -a ${LOG}
   rclone --config ${RCLONECONFIG} -L --fast-list dedupe --dedupe-mode newest ${BACKUPDIR} 2>&1 | tee -a ${LOG}
 fi
+echo " " 2>&1 | tee -a ${LOG}
 
 if [[ ${SIZECHECK} == "TRUE" ]]; then
   echo "INFO: Starting to calculate final size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}  
   SIZEAFTERORIG=$(rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
   echo "OUTPUT: ${SIZEAFTERORIG}" 2>&1 | tee -a ${LOG}
-  SIZEAFTER=$(echo "${SIZEAFTERORIG}" | awk -F\( '{print $2}' | awk -FBytes '{ print $1 }' | tail -1)
+  SIZEAFTER=$(echo "${SIZEAFTERORIG}" | awk -F\( '{print $2}' | awk -FByte '{ print $1 }' | tail -1)
   echo "INFO: Size of remote directory after rclone: ${SIZEAFTER}" 2>&1 | tee -a ${LOG}
-  DIFFERENCE=$(echo "$SIZEAFTER $SIZEBEFORE" | awk '{ byte =($1 - $2)/1024/1024/1024; print byte " GB" }')
+  DIFFERENCE=$(echo "${SIZEAFTER} ${SIZEBEFORE}" | awk '{ byte =($1 - $2)/1024/1024/1024; print byte " GB" }')
   echo "INFO: Size difference: ${DIFFERENCE}" 2>&1 | tee -a ${LOG}
 fi
 
 echo "INFO: Checking used local space again for comparison @ $(date) ... " 2>&1 | tee -a ${LOG}
-du -s -B1 ${RAIDDIR}/. 2>&1 | tee -a ${LOG}
+echo "INFO: $(du -s -B1 ${RAIDDIR}/.)" 2>&1 | tee -a ${LOG}
 
 
 echo " " 2>&1 | tee -a ${LOG}
