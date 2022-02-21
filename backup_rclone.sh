@@ -208,7 +208,7 @@ if [[ ${SIZECHECK} == "TRUE" ]]; then
   echo "INFO: Starting to calculate initial size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}
   SIZEBEFOREORIG=$(rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
   echo "OUTPUT: ${SIZEBEFOREORIG}" 2>&1 | tee -a ${LOG}
-  SIZEBEFORE=$(echo "${SIZEBEFOREORIG}" | awk -F\( '{print $2}' | awk -FByte '{ print $1 }' | tail -1)
+  SIZEBEFORE=$(echo "${SIZEBEFOREORIG}" | awk -F\( '{print $2}' | awk -F"byte|Byte" '{ print $1 }' | tail -1)
   echo "INFO: Size of remote directory before rclone: ${SIZEBEFORE}" 2>&1 | tee -a ${LOG}
 else
   echo "INFO: Not performing any size checks" 2>&1 | tee -a ${LOG}
@@ -250,7 +250,7 @@ if [[ ${SIZECHECK} == "TRUE" ]]; then
   echo "INFO: Starting to calculate final size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}  
   SIZEAFTERORIG=$(rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
   echo "OUTPUT: ${SIZEAFTERORIG}" 2>&1 | tee -a ${LOG}
-  SIZEAFTER=$(echo "${SIZEAFTERORIG}" | awk -F\( '{print $2}' | awk -FByte '{ print $1 }' | tail -1)
+  SIZEAFTER=$(echo "${SIZEAFTERORIG}" | awk -F\( '{print $2}' | awk -F"byte|Byte" '{ print $1 }' | tail -1)
   echo "INFO: Size of remote directory after rclone: ${SIZEAFTER}" 2>&1 | tee -a ${LOG}
   DIFFERENCE=$(echo "${SIZEAFTER} ${SIZEBEFORE}" | awk '{ byte =($1 - $2)/1024/1024/1024; print byte " GB" }')
   echo "INFO: Size difference: ${DIFFERENCE}" 2>&1 | tee -a ${LOG}
