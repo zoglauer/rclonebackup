@@ -222,6 +222,7 @@ if [[ ${MAXDIFF} -ge 1 ]]; then
   RATIO=$(echo "100.0 * ${SIZEDIFF} / ${SIZEROT}" | bc )
 fi
 
+AGE=$((($(date +%s) - $(date +%s -r "${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz")) / 86400))
 
 # Find recently changed virtualbox files:
 EXCLUDE=""
@@ -239,9 +240,9 @@ if [ ${#files[@]} -gt 0 ]; then
   fi
 fi
 
-# We create a new rotation when there is none, or if we have exceeded or maximum number of diffs 
+# We create a new rotation when there is none, or if we have exceeded or maximum number of diffs, or if the rotation is older than 14 days 
 TARERROR="FALSE"
-if [[ ${MAXROTATION} -eq 0 ]] || [[ ${RATIO} -gt ${MAXRATIO} ]] || [[ ${MAXROTATION} -ge 100 ]]; then
+if [[ ${MAXROTATION} -eq 0 ]] || [[ ${RATIO} -gt ${MAXRATIO} ]] || [[ ${MAXROTATION} -ge 100 ]] || [[ ${AGE} > 14 ]]; then
 
   MAXROTATION=$(( MAXROTATION + 1 ))
   
