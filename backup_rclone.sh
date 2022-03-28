@@ -78,10 +78,27 @@ done
 
 RAIDDIR="/volumes/${NAME}"
 RCLONECONFIG=$(dirname "$0")/rclone.conf
-LOG="/tmp/Backup_$(basename ${RAIDDIR})_$(date +%Y%m%d_%H%M%S).log"
+
+# Setup the backup facility - default is going to /var/log/backups
+if [[ ! -f /etc/logrotate.d/backups ]]; then
+  echo "/var/log/backups { " >> /etc/logrotate.d/backups
+  echo "  rotate 5 " >> /etc/logrotate.d/backups
+  echo "  weekly " >> /etc/logrotate.d/backups
+  echo "  compress " >> /etc/logrotate.d/backups
+  echo "  missingok " >> /etc/logrotate.d/backups
+  echo "  notifempty " >> /etc/logrotate.d/backups
+  echo "}" >> /etc/logrotate.d/backups
+fi
+
+LOG="/var/log/backups"
 
 # We do not want to sync if we are not mounted or have any other problem -- since that might remove all remote data
 
+echo " " 2>&1 | tee -a ${LOG}
+echo " " 2>&1 | tee -a ${LOG}
+echo " " 2>&1 | tee -a ${LOG}
+echo " " 2>&1 | tee -a ${LOG}
+echo " " 2>&1 | tee -a ${LOG}
 echo "INFO: Started backup script for ${NAME} @ $(date)" 2>&1 | tee -a ${LOG}
 echo " " 2>&1 | tee -a ${LOG}
 
@@ -163,7 +180,7 @@ echo "INFO: Running \"du\" to trigger any failures" 2>&1 | tee -a ${LOG}
 du -s ${RAIDDIR}/${USERDIR} 2>&1 > /dev/null
 if [ "$?" != "0" ]; then
     echo "ERROR: Unable to read directory size via du" 2>&1 | tee -a ${LOG}
-      exit 1
+    exit 1
 fi
 
 
