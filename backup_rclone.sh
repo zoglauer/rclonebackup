@@ -89,7 +89,6 @@ if [[ ! -f /etc/logrotate.d/backups ]]; then
   echo "  notifempty " >> /etc/logrotate.d/backups
   echo "}" >> /etc/logrotate.d/backups
 fi
-
 LOG="/var/log/backups"
 
 # We do not want to sync if we are not mounted or have any other problem -- since that might remove all remote data
@@ -217,13 +216,13 @@ echo " " 2>&1 | tee -a ${LOG}
 BACKUPDIR=${NAME}encrypted:latest
 BACKUPDIFFDIR=${NAME}encrypted:latest-diff-$(date +%Y-%m-%d--%H-%M-%S)
 
-# In case the directory does not exist make it, otheriwse this does nothing
+# In case the directory does not exist make it, otherwise this does nothing
 rclone --config ${RCLONECONFIG} mkdir ${BACKUPDIR}
 
 # Check size before
 if [[ ${SIZECHECK} == "TRUE" ]]; then
   echo "INFO: Starting to calculate initial size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}
-  SIZEBEFOREORIG=$(rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
+  SIZEBEFOREORIG=$(timeout 2h rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
   echo "OUTPUT: ${SIZEBEFOREORIG}" 2>&1 | tee -a ${LOG}
   SIZEBEFORE=$(echo "${SIZEBEFOREORIG}" | awk -F\( '{print $2}' | awk -F"byte|Byte" '{ print $1 }' | tail -1)
   echo "INFO: Size of remote directory before rclone: ${SIZEBEFORE}" 2>&1 | tee -a ${LOG}
@@ -259,13 +258,13 @@ echo " " 2>&1 | tee -a ${LOG}
 echo "INFO: Checking for duplicates  @ $(date) ... " 2>&1 | tee -a ${LOG}
 if grep -q "Duplicate object found" ${LOG}; then
   echo "INFO: Duplicates found and keeping only newest... " 2>&1 | tee -a ${LOG}
-  rclone --config ${RCLONECONFIG} -L --fast-list dedupe --dedupe-mode newest ${BACKUPDIR} 2>&1 | tee -a ${LOG}
+  timeout 6h rclone --config ${RCLONECONFIG} -L --fast-list dedupe --dedupe-mode newest ${BACKUPDIR} 2>&1 | tee -a ${LOG}
 fi
 echo " " 2>&1 | tee -a ${LOG}
 
 if [[ ${SIZECHECK} == "TRUE" ]]; then
   echo "INFO: Starting to calculate final size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}  
-  SIZEAFTERORIG=$(rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
+  SIZEAFTERORIG=$(timeout 2h rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
   echo "OUTPUT: ${SIZEAFTERORIG}" 2>&1 | tee -a ${LOG}
   SIZEAFTER=$(echo "${SIZEAFTERORIG}" | awk -F\( '{print $2}' | awk -F"byte|Byte" '{ print $1 }' | tail -1)
   echo "INFO: Size of remote directory after rclone: ${SIZEAFTER}" 2>&1 | tee -a ${LOG}
