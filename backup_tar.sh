@@ -210,9 +210,6 @@ for F in `ls ${BACKUPPREFIX}.rot${MAXROTATION}.diff*.tar.gz 2>/dev/null`; do
   fi
 done
 
-echo "INFO: Found maximum rotation:   ${MAXROTATION}" 
-echo "INFO: Found maximum diff:       ${MAXDIFF}"
-echo ""
 
 # Calculate the file size difference between the rotation and the highest diff
 RATIO=0
@@ -222,7 +219,17 @@ if [[ ${MAXDIFF} -ge 1 ]]; then
   RATIO=$(echo "100.0 * ${SIZEDIFF} / ${SIZEROT}" | bc )
 fi
 
+
+# Calculate the age of the rotation
 AGE=$((($(date +%s) - $(date +%s -r "${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz")) / 86400))
+
+
+echo "INFO: Found maximum rotation:   ${MAXROTATION}" 
+echo "INFO: Found maximum diff:       ${MAXDIFF}"
+echo "INFO: Found ratio diff/rot:     ${RATIO}"
+echo "INFO: Found rotation age:       ${AGE}"
+echo ""
+
 
 # Find recently changed virtualbox files:
 EXCLUDE=""
@@ -242,7 +249,7 @@ fi
 
 # We create a new rotation when there is none, or if we have exceeded or maximum number of diffs, or if the rotation is older than 14 days 
 TARERROR="FALSE"
-if [[ ${MAXROTATION} -eq 0 ]] || [[ ${RATIO} -gt ${MAXRATIO} ]] || [[ ${MAXROTATION} -ge 100 ]] || [[ ${AGE} > 14 ]]; then
+if [ ${MAXROTATION} -eq 0 ] || [ ${RATIO} -gt ${MAXRATIO} ] || [ ${MAXDIFF} -ge 100 ] || [ ${AGE} -gt 14 ]; then
 
   MAXROTATION=$(( MAXROTATION + 1 ))
   
