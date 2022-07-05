@@ -243,6 +243,8 @@ OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --s
 OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m -L --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 # 2022/2/12: Copy links as .rclonelink to avoid dangling links
 OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m -l --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+# 2022/7/3: Prioritize the smallest files (75%, usually user edited files) and largest files (25%, backups)
+OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m -l --fast-list --transfers=4 --check-first --order-by size,mixed,75 --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 if [[ ${VERBOSE} == "FALSE" ]]; then
   OPTIONS="--stats-one-line ${OPTIONS}"
 fi
