@@ -213,7 +213,7 @@ done
 
 # Calculate the file size difference between the rotation and the highest diff
 RATIO=0
-if [[ ${MAXDIFF} -ge 1 ]]; then
+if [ ${MAXDIFF} -ge 1 ]; then
   SIZEROT=$(stat --printf="%s" ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz)
   SIZEDIFF=$(stat --printf="%s" ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz)
   RATIO=$(echo "100.0 * ${SIZEDIFF} / ${SIZEROT}" | bc )
@@ -221,8 +221,10 @@ fi
 
 
 # Calculate the age of the rotation
-AGE=$((($(date +%s) - $(date +%s -r "${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz")) / 86400))
-
+AGE=0
+if [ ${MAXROTATION} -ge 1 ]; then
+  AGE=$((($(date +%s) - $(date +%s -r "${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz")) / 86400))
+fi
 
 echo "INFO: Found maximum rotation:   ${MAXROTATION}" 
 echo "INFO: Found maximum diff:       ${MAXDIFF}"
