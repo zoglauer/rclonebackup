@@ -154,7 +154,7 @@ if [[ ${MOUNTPOINT} == "" ]]; then
   # zfs
   MOUNTPOINT=$(findmnt -n -o SOURCE | grep ${NAME})
   if [[ ${MOUNTPOINT} == "" ]]; then
-    echo "ERROR: Mount point not found" 2>&1 | tee -a ${LOG}
+    echo "ERROR: Mount point not found (mdadm or zfs)" 2>&1 | tee -a ${LOG}
     exit 1
   fi
 fi
