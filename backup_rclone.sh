@@ -44,7 +44,7 @@ done
 # Default options
 NAME=""
 BACKUPHOMEDESTINATION=""
-TIMEOUT=21
+TIMEOUT=117  # 5 days max 
 SIZECHECK="TRUE"
 VERBOSE="FALSE"
 # Docker has too many small files for backup to gogole drive -- we always need to exclude it
@@ -85,6 +85,7 @@ if [[ ! -f /etc/logrotate.d/backups ]]; then
   echo "  rotate 5 " >> /etc/logrotate.d/backups
   echo "  weekly " >> /etc/logrotate.d/backups
   echo "  compress " >> /etc/logrotate.d/backups
+  echo "  delaycompress " >> /etc/logrotate.d/backups
   echo "  missingok " >> /etc/logrotate.d/backups
   echo "  notifempty " >> /etc/logrotate.d/backups
   echo "}" >> /etc/logrotate.d/backups
@@ -247,6 +248,8 @@ OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m -l 
 OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m -l --fast-list --transfers=4 --check-first --order-by size,mixed,75 --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 if [[ ${VERBOSE} == "FALSE" ]]; then
   OPTIONS="--stats-one-line ${OPTIONS}"
+else
+  OPTIONS="-v ${OPTIONS}"
 fi
 echo "INFO: rclone options: ${OPTIONS}" 2>&1 | tee -a ${LOG}
 echo " " 2>&1 | tee -a ${LOG}
@@ -255,6 +258,7 @@ echo " " 2>&1 | tee -a ${LOG}
 
 echo "INFO: Starting rclone @ $(date) ... " 2>&1 | tee -a ${LOG}
 timeout ${TIMEOUT}h rclone ${OPTIONS} 2>&1 | tee -a ${LOG}
+#rclone ${OPTIONS} 2>&1 | tee -a ${LOG}
 
 echo "INFO: rclone exited with code $? @ $(date)" 2>&1 | tee -a ${LOG}
 echo " " 2>&1 | tee -a ${LOG}
