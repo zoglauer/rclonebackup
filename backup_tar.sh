@@ -19,7 +19,7 @@ help() {
   echo "  --archive=[name]: The directory where to store the backup"
   echo "  --rotations=[number]: The number of rotations to keep (minimum 2, default 2)"
   echo "  --diffs=[number]: The number of diffs to keep (minimum 2, default 5)"
-  echo "  --maxratio=[percent]: The maximum size in percent a diff can of a rotation, before we start a new rotation (minium 5, maximum 50, default 10)"
+  echo "  --maxratio=[percent]: The maximum size in percent a diff can have compared to the latest rotation, before we start a new rotation (minium 5, maximum 50, default 10)"
   echo ""
 }
 
@@ -42,6 +42,7 @@ ARCHIVE="NONE____NONE"
 ROTATIONS=2
 DIFFS=5
 MAXRATIO=5
+AGELIMIT=90 # days
 
 # Overwrite default options with user options:
 for C in "${CMD[@]}"; do
@@ -175,6 +176,7 @@ echo "INFO: Using this archive directory:                               ${ARCHIV
 echo "INFO: Using this number of rotations:                             ${ROTATIONS}"
 echo "INFO: Using this number of diffs:                                 ${DIFFS}"
 echo "INFO: Using this maximum ratio between diff and rotation size:    ${MAXRATIO}"
+echo "INFO: Using this age limit of rotations:                          ${AGELIMIT}"
 echo ""
 
 # For testing create a new file in the folder
@@ -197,6 +199,7 @@ for F in `ls ${BACKUPPREFIX}.rot*.tar.gz 2>/dev/null`; do
     fi
   fi
 done
+echo "INFO: Found maximum rotation:   ${MAXROTATION}"
 
 
 # Find the highest diff
@@ -209,6 +212,8 @@ for F in `ls ${BACKUPPREFIX}.rot${MAXROTATION}.diff*.tar.gz 2>/dev/null`; do
     fi
   fi
 done
+echo "INFO: Found maximum diff:       ${MAXDIFF}"
+
 
 
 # Calculate the file size difference between the rotation and the highest diff
@@ -217,6 +222,9 @@ if [ ${MAXDIFF} -ge 1 ]; then
   SIZEROT=$(stat --printf="%s" ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz)
   SIZEDIFF=$(stat --printf="%s" ${BACKUPPREFIX}.rot${MAXROTATION}.diff${MAXDIFF}.tar.gz)
   RATIO=$(echo "100.0 * ${SIZEDIFF} / ${SIZEROT}" | bc )
+  echo "INFO: Size rotation:            ${SIZEROT}"
+  echo "INFO: Size maximum diff:        ${SIZEDIFF}"
+  echo "INFO: Found ratio diff/rot:     ${RATIO}"
 fi
 
 
@@ -224,12 +232,8 @@ fi
 AGE=0
 if [ ${MAXROTATION} -ge 1 ]; then
   AGE=$((($(date +%s) - $(date +%s -r "${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz")) / 86400))
+  echo "INFO: Found rotation age:       ${AGE}"
 fi
-
-echo "INFO: Found maximum rotation:   ${MAXROTATION}" 
-echo "INFO: Found maximum diff:       ${MAXDIFF}"
-echo "INFO: Found ratio diff/rot:     ${RATIO}"
-echo "INFO: Found rotation age:       ${AGE}"
 echo ""
 
 
@@ -249,15 +253,33 @@ if [ ${#files[@]} -gt 0 ]; then
   fi
 fi
 
+
 # We create a new rotation when there is none, or if we have exceeded or maximum number of diffs, or if the rotation is older than 14 days 
+NEEDROTATION="FALSE"
+if [ ${MAXROTATION} -eq 0 ]; then
+  echo "INFO: Require new rotation since there is none."
+  NEEDROTATION="TRUE"
+elif [ ${RATIO} -gt ${MAXRATIO} ]; then
+  echo "INFO: Require new rotation since the file size ratio is larger than the threshold"
+  NEEDROTATION="TRUE"
+elif [ ${MAXDIFF} -ge 100 ]; then
+  echo "INFO: Require new rotation since we exceeded the maximum number of allowed diffs"
+  NEEDROTATION="TRUE"
+elif [ ${AGE} -gt ${AGELIMIT} ]; then
+  echo "INFO: Require new rotation since the main rotation is more than ${AGELIMIT} days old"
+  NEEDROTATION="TRUE"
+fi
+
+
 TARERROR="FALSE"
-if [ ${MAXROTATION} -eq 0 ] || [ ${RATIO} -gt ${MAXRATIO} ] || [ ${MAXDIFF} -ge 100 ] || [ ${AGE} -gt 14 ]; then
+if [[ ${NEEDROTATION} == "TRUE" ]]; then
 
   MAXROTATION=$(( MAXROTATION + 1 ))
   
   echo ""
   echo "INFO: Creating new rotation with ID ${MAXROTATION}"
-  
+ 
+
   #COMMAND="tar ${EXCLUDE} --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.log --use-compress-program='pigz --best --recursive' -cf ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz ${EXCLUDE} ."
   COMMAND="tar --listed-incremental=${BACKUPPREFIX}.rot${MAXROTATION}.log --use-compress-program=pigz -cf ${BACKUPPREFIX}.rot${MAXROTATION}.tar.gz ."
   echo " "
