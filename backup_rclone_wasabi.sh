@@ -48,7 +48,7 @@ TIMEOUT=21
 SIZECHECK="TRUE"
 VERBOSE="FALSE"
 # Docker has too many small files for backup to gogole drive -- we always need to exclude it
-EXCLUDES="docker/"
+EXCLUDES="docker/ users/simy/"
 
 # Overwrite default options with user options:
 for C in "${CMD[@]}"; do
