@@ -20,3 +20,14 @@ To convert dangling links to empty files do:
 for i in `find -L . -type l`; do rm ${i}; touch ${i}; done
 ```
 
+## crontab:
+```
+sudo crontab -e
+```
+
+```
+30 */8 * * * bash /home/andreas/Science/Software/rclonebackup/backup_rclone.sh -n=atlas -b=backups &>> /tmp/BackupAtlas.log
+```
+
+
+

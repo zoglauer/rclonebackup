@@ -44,7 +44,7 @@ done
 # Default options
 NAME=""
 BACKUPHOMEDESTINATION=""
-TIMEOUT=21
+TIMEOUT=117  # 5 days max 
 SIZECHECK="TRUE"
 VERBOSE="FALSE"
 # Docker has too many small files for backup to gogole drive -- we always need to exclude it
@@ -79,12 +79,16 @@ done
 RAIDDIR="/volumes/${NAME}"
 RCLONECONFIG=$(dirname "$0")/rclone.conf
 
+BACKUPDIR=${NAME}encrypted:latest
+BACKUPDIFFDIR=${NAME}encrypted:latest-diff-$(date +%Y-%m-%d--%H-%M-%S)
+
 # Setup the backup facility - default is going to /var/log/backups
 if [[ ! -f /etc/logrotate.d/backups ]]; then
   echo "/var/log/backups { " >> /etc/logrotate.d/backups
   echo "  rotate 5 " >> /etc/logrotate.d/backups
   echo "  weekly " >> /etc/logrotate.d/backups
   echo "  compress " >> /etc/logrotate.d/backups
+  echo "  delaycompress " >> /etc/logrotate.d/backups
   echo "  missingok " >> /etc/logrotate.d/backups
   echo "  notifempty " >> /etc/logrotate.d/backups
   echo "}" >> /etc/logrotate.d/backups
@@ -154,7 +158,7 @@ if [[ ${MOUNTPOINT} == "" ]]; then
   # zfs
   MOUNTPOINT=$(findmnt -n -o SOURCE | grep ${NAME})
   if [[ ${MOUNTPOINT} == "" ]]; then
-    echo "ERROR: Mount point not found" 2>&1 | tee -a ${LOG}
+    echo "ERROR: Mount point not found (mdadm or zfs)" 2>&1 | tee -a ${LOG}
     exit 1
   fi
 fi
@@ -175,6 +179,7 @@ fi
 #  fi
 #fi
 
+
 echo "INFO: Running \"du\" to trigger any failures" 2>&1 | tee -a ${LOG}
 du -s ${RAIDDIR}/${USERDIR} 2>&1 > /dev/null
 if [ "$?" != "0" ]; then
@@ -185,6 +190,8 @@ fi
 
 echo " " 2>&1 | tee -a ${LOG} 
 echo "INFO: All tests passed! " 2>&1 | tee -a ${LOG}
+
+
 
 if [[ ${BACKUPHOMEDESTINATION} != "" ]]; then 
 
@@ -243,8 +250,12 @@ OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m --s
 OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m -L --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 # 2022/2/12: Copy links as .rclonelink to avoid dangling links
 OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m -l --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+# 2022/7/3: Prioritize the smallest files (75%, usually user edited files) and largest files (25%, backups)
+OPTIONS="--config ${RCLONECONFIG} --drive-stop-on-upload-limit -P --stats 1m -l --fast-list --transfers=4 --check-first --order-by size,mixed,75 --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 if [[ ${VERBOSE} == "FALSE" ]]; then
   OPTIONS="--stats-one-line ${OPTIONS}"
+else
+  OPTIONS="-v ${OPTIONS}"
 fi
 echo "INFO: rclone options: ${OPTIONS}" 2>&1 | tee -a ${LOG}
 echo " " 2>&1 | tee -a ${LOG}
@@ -261,21 +272,48 @@ echo "INFO: Checking for duplicates  @ $(date) ... " 2>&1 | tee -a ${LOG}
 if grep -q "Duplicate object found" ${LOG}; then
   echo "INFO: Duplicates found and keeping only newest... " 2>&1 | tee -a ${LOG}
   timeout 6h rclone --config ${RCLONECONFIG} -L --fast-list dedupe --dedupe-mode newest ${BACKUPDIR} 2>&1 | tee -a ${LOG}
+else
+  echo "INFO: No duplicates found " 2>&1 | tee -a ${LOG}
 fi
 echo " " 2>&1 | tee -a ${LOG}
 
 if [[ ${SIZECHECK} == "TRUE" ]]; then
   echo "INFO: Starting to calculate final size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}  
-  SIZEAFTERORIG=$(timeout 2h rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
-  echo "OUTPUT: ${SIZEAFTERORIG}" 2>&1 | tee -a ${LOG}
+  SIZEAFTERORIG=$(timeout 2h rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR} 2>&1)
+  
+  echo "INFO: Unformatted size output: ${SIZEAFTERORIG}" 2>&1 | tee -a ${LOG}
   SIZEAFTER=$(echo "${SIZEAFTERORIG}" | awk -F\( '{print $2}' | awk -F"byte|Byte" '{ print $1 }' | tail -1)
   echo "INFO: Size of remote directory after rclone: ${SIZEAFTER}" 2>&1 | tee -a ${LOG}
   DIFFERENCE=$(echo "${SIZEAFTER} ${SIZEBEFORE}" | awk '{ byte =($1 - $2)/1024/1024/1024; print byte " GB" }')
   echo "INFO: Size difference: ${DIFFERENCE}" 2>&1 | tee -a ${LOG}
+
+  echo "INFO: Checking used local space again for comparison @ $(date) ... " 2>&1 | tee -a ${LOG}
+  echo "INFO: $(du -s -B1 ${RAIDDIR}/.)" 2>&1 | tee -a ${LOG}
 fi
 
-echo "INFO: Checking used local space again for comparison @ $(date) ... " 2>&1 | tee -a ${LOG}
-echo "INFO: $(du -s -B1 ${RAIDDIR}/.)" 2>&1 | tee -a ${LOG}
+echo " " 2>&1 | tee -a ${LOG}
+echo "INFO: Checking to cleanup old diffs @$(date) ... " 2>&1 | tee -a ${LOG}
+
+LIST=$(rclone --config ${RCLONECONFIG} lsd ${NAME}encrypted: 2>&1)
+DIRS=$(echo "${LIST}" | awk '{ print $5 }')
+
+TOBEDELETED=""
+NINETYDAYSAGO=$(date --date="90 days ago" +%s)
+for D in ${DIRS}; do
+  echo "${D}" 2>&1 | tee -a ${LOG}
+  if [[ ${D} == latest-diff-* ]]; then
+    TESTDATE=$(date --date="$(echo "${D}" | awk -F'[-]'  '{ printf "%s-%s-%s %s:%s:%s", $3, $4, $5, $7, $8, $9 }')" +%s)
+    if (( ${TESTDATE} < ${NINETYDAYSAGO} )); then
+      TOBEDELETED+="${D} "
+    fi
+  fi
+done
+
+
+for D in ${TOBEDELETED}; do
+  echo "INFO: Deleting ${D} ... " 2>&1 | tee -a ${LOG}
+  rclone --config ${RCLONECONFIG} purge ${NAME}encrypted:${D} 2>&1 | tee -a ${LOG}
+done
 
 
 echo " " 2>&1 | tee -a ${LOG}
