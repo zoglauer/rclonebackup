@@ -213,8 +213,9 @@ for E in ${EXCLUDES}; do
 done
 echo " " 2>&1 | tee -a ${LOG}
 
-BACKUPDIR=backup-${NAME}-encrypted:latest
-BACKUPDIFFDIR=backup-${NAME}-encrypted:latest-diff-$(date +%Y-%m-%d--%H-%M-%S)
+BACKUPBASE=backup-${NAME}-encrypted
+BACKUPDIR=${BACKUPBASE}:latest
+BACKUPDIFFDIR=${BACKUPBASE}:latest-diff-$(date +%Y-%m-%d--%H-%M-%S)
 
 # In case the directory does not exist make it, otherwise this does nothing
 rclone --config ${RCLONECONFIG} mkdir ${BACKUPDIR}
@@ -254,19 +255,47 @@ if grep -q "Duplicate object found" ${LOG}; then
 fi
 echo " " 2>&1 | tee -a ${LOG}
 
+
 if [[ ${SIZECHECK} == "TRUE" ]]; then
-  echo "INFO: Starting to calculate final size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}  
-  SIZEAFTERORIG=$(timeout 2h rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
-  echo "OUTPUT: ${SIZEAFTERORIG}" 2>&1 | tee -a ${LOG}
+  echo "INFO: Starting to calculate final size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}
+  SIZEAFTERORIG=$(timeout 2h rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR} 2>&1)
+
+  echo "INFO: Unformatted size output: ${SIZEAFTERORIG}" 2>&1 | tee -a ${LOG}
   SIZEAFTER=$(echo "${SIZEAFTERORIG}" | awk -F\( '{print $2}' | awk -F"byte|Byte" '{ print $1 }' | tail -1)
   echo "INFO: Size of remote directory after rclone: ${SIZEAFTER}" 2>&1 | tee -a ${LOG}
   DIFFERENCE=$(echo "${SIZEAFTER} ${SIZEBEFORE}" | awk '{ byte =($1 - $2)/1024/1024/1024; print byte " GB" }')
   echo "INFO: Size difference: ${DIFFERENCE}" 2>&1 | tee -a ${LOG}
+
+  echo "INFO: Checking used local space again for comparison @ $(date) ... " 2>&1 | tee -a ${LOG}
+  echo "INFO: $(du -s -B1 ${RAIDDIR}/.)" 2>&1 | tee -a ${LOG}
 fi
 
-echo "INFO: Checking used local space again for comparison @ $(date) ... " 2>&1 | tee -a ${LOG}
-echo "INFO: $(du -s -B1 ${RAIDDIR}/.)" 2>&1 | tee -a ${LOG}
 
+echo " " 2>&1 | tee -a ${LOG}
+echo "INFO: Checking to cleanup old diffs @$(date) ... " 2>&1 | tee -a ${LOG}
+
+LIST=$(rclone --config ${RCLONECONFIG} lsd ${BACKUPBASE}: 2>&1)
+echo "List: ${LIST}"
+DIRS=$(echo "${LIST}" | awk '{ print $5 }')
+echo "Dirs: ${DIRS}"
+
+TOBEDELETED=""
+NINETYDAYSAGO=$(date --date="90 days ago" +%s)
+for D in ${DIRS}; do
+  echo "${D}" 2>&1 | tee -a ${LOG}
+  if [[ ${D} == latest-diff-* ]]; then
+    TESTDATE=$(date --date="$(echo "${D}" | awk -F'[-]'  '{ printf "%s-%s-%s %s:%s:%s", $3, $4, $5, $7, $8, $9 }')" +%s)
+    if (( ${TESTDATE} < ${NINETYDAYSAGO} )); then
+      TOBEDELETED+="${D} "
+    fi
+  fi
+done
+
+
+for D in ${TOBEDELETED}; do
+  echo "INFO: Deleting ${D} ... " 2>&1 | tee -a ${LOG}
+  rclone --config ${RCLONECONFIG} purge ${BACKUPBASE}:${D} 2>&1 | tee -a ${LOG}
+done
 
 echo " " 2>&1 | tee -a ${LOG}
 echo "INFO: Done @ $(date)! " 2>&1 | tee -a ${LOG}
