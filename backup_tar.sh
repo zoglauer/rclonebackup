@@ -42,7 +42,7 @@ ARCHIVE="NONE____NONE"
 ROTATIONS=2
 DIFFS=5
 MAXRATIO=5
-AGELIMIT=90 # days
+AGELIMIT=3650 # days
 
 # Overwrite default options with user options:
 for C in "${CMD[@]}"; do
