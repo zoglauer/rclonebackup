@@ -77,7 +77,7 @@ for C in "${CMD[@]}"; do
 done
 
 RAIDDIR="/volumes/${NAME}"
-RCLONECONFIG=$(dirname "$0")/rclone.conf
+RCLONECONFIG=$(dirname "$0")/rclone_wasabi.conf
 
 # Setup the backup facility - default is going to /var/log/backups
 if [[ ! -f /etc/logrotate.d/backups ]]; then
