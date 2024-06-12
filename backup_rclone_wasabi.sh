@@ -19,6 +19,7 @@ help() {
   echo "  --backuphomes=[destination]: If set, backup all home directories to [destination], which needs to be on the raid (top level)"
   echo "  --timeout=[hours]: Set a timeout in hours, default is 22 hours"
   echo "  --do-size-check / --no-size-check: Check for remote size"
+  echo "  --filter: Filter standard files (sim, tra, evta, rsp)"
   echo "  --verbose: Verbose output"
   echo ""
   echo "Assumptions:"
@@ -46,6 +47,7 @@ NAME=""
 BACKUPHOMEDESTINATION=""
 TIMEOUT=21
 SIZECHECK="TRUE"
+FILTERFILES="FALSE"
 VERBOSE="FALSE"
 # Docker has too many small files for backup to gogole drive -- we always need to exclude it
 EXCLUDES="docker/ users/simy/"
@@ -62,6 +64,8 @@ for C in "${CMD[@]}"; do
     SIZECHECK="TRUE"
   elif [[ ${C} == *-v* ]]; then
     VERBOSE="TRUE"
+  elif [[ ${C} == *-f* ]]; then
+    FILTERFILES="TRUE"
   elif [[ ${C} == *-no-size-c* ]]; then
     SIZECHECK="FALSE"
   elif [[ ${C} == *-h* ]]; then
@@ -132,13 +136,13 @@ echo "INFO: Checking if this script is still running"  2>&1 | tee -a ${LOG}
 STATUS=$(ps -efww | grep -w -E "root.*backup_rclone.sh" | grep -v "grep" | grep -v "sudo" | grep -v "timeout" | grep -v $$)
 if [[ ${STATUS} != "" ]]; then
   echo "ERROR: ${PROGRAMNAME} still running"  2>&1 | tee -a ${LOG}
-  exit 1
+  #exit 1
 fi
 
 echo "INFO: Checking if rclone is still running"  2>&1 | tee -a ${LOG}
 if [[ $(ps -Af | grep "[ ]rclone") != "" ]]; then
   echo "ERROR: rclone still running"  2>&1 | tee -a ${LOG}
-  exit 1
+  #exit 1
 fi
 
 echo "INFO: Checking if the volume is mounted" 2>&1 | tee -a ${LOG}
@@ -216,14 +220,17 @@ echo " " 2>&1 | tee -a ${LOG}
 BACKUPBASE=backup-${NAME}-encrypted
 BACKUPDIR=${BACKUPBASE}:latest
 BACKUPDIFFDIR=${BACKUPBASE}:latest-diff-$(date +%Y-%m-%d--%H-%M-%S)
-
+FILTER=" "
+if [[ ${FILTERFILES} == TRUE ]]; then
+  FILTER="--filter-from $(dirname "$0")/rclone_filter.txt "
+fi
 # In case the directory does not exist make it, otherwise this does nothing
 rclone --config ${RCLONECONFIG} mkdir ${BACKUPDIR}
 
 # Check size before
 if [[ ${SIZECHECK} == "TRUE" ]]; then
   echo "INFO: Starting to calculate initial size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}
-  SIZEBEFOREORIG=$(timeout 2h rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR})
+  SIZEBEFOREORIG=$(timeout 2h rclone --config ${RCLONECONFIG} ${FILTER} --fast-list size ${BACKUPDIR})
   echo "OUTPUT: ${SIZEBEFOREORIG}" 2>&1 | tee -a ${LOG}
   SIZEBEFORE=$(echo "${SIZEBEFOREORIG}" | awk -F\( '{print $2}' | awk -F"byte|Byte" '{ print $1 }' | tail -1)
   echo "INFO: Size of remote directory before rclone: ${SIZEBEFORE}" 2>&1 | tee -a ${LOG}
@@ -233,7 +240,7 @@ fi
 echo " " 2>&1 | tee -a ${LOG}
 
 # 2022/2/12: Copy links as .rclonelink to avoid dangling links
-OPTIONS="--config ${RCLONECONFIG}  -P --stats 1m -l --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+OPTIONS="--config ${RCLONECONFIG} --dry-run -P --stats 1m -l --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 if [[ ${VERBOSE} == "FALSE" ]]; then
   OPTIONS="--stats-one-line ${OPTIONS}"
 fi
@@ -258,7 +265,7 @@ echo " " 2>&1 | tee -a ${LOG}
 
 if [[ ${SIZECHECK} == "TRUE" ]]; then
   echo "INFO: Starting to calculate final size of remote directory @ $(date) ... " 2>&1 | tee -a ${LOG}
-  SIZEAFTERORIG=$(timeout 2h rclone --config ${RCLONECONFIG} --fast-list size ${BACKUPDIR} 2>&1)
+  SIZEAFTERORIG=$(timeout 2h rclone --config ${RCLONECONFIG} ${FILTER} --fast-list size ${BACKUPDIR} 2>&1)
 
   echo "INFO: Unformatted size output: ${SIZEAFTERORIG}" 2>&1 | tee -a ${LOG}
   SIZEAFTER=$(echo "${SIZEAFTERORIG}" | awk -F\( '{print $2}' | awk -F"byte|Byte" '{ print $1 }' | tail -1)

@@ -1,0 +1,15 @@
++ */Products/**
++ */Release/**
+- *.sim
+- *.sim.gz
+- *.tra
+- *.tra.gz
+- *.evta
+- *.evta.gz
+- *.rsp
+- *.rsp.gz
+- *.pkl
+- */NuSTAR/Archive/**
+- */NuSTAR/COSMOS/**
+- */site-packages/**
++ */
