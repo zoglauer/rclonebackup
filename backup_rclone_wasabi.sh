@@ -240,7 +240,7 @@ fi
 echo " " 2>&1 | tee -a ${LOG}
 
 # 2022/2/12: Copy links as .rclonelink to avoid dangling links
-OPTIONS="--config ${RCLONECONFIG} --dry-run -P --stats 1m -l --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+OPTIONS="--config ${RCLONECONFIG} -P --stats 1m -l --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 if [[ ${VERBOSE} == "FALSE" ]]; then
   OPTIONS="--stats-one-line ${OPTIONS}"
 fi

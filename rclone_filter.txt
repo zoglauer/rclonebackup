@@ -12,4 +12,5 @@
 - */NuSTAR/Archive/**
 - */NuSTAR/COSMOS/**
 - */site-packages/**
+- Lacie*.img
 + */
