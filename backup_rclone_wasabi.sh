@@ -136,13 +136,13 @@ echo "INFO: Checking if this script is still running"  2>&1 | tee -a ${LOG}
 STATUS=$(ps -efww | grep -w -E "root.*backup_rclone.sh" | grep -v "grep" | grep -v "sudo" | grep -v "timeout" | grep -v $$)
 if [[ ${STATUS} != "" ]]; then
   echo "ERROR: ${PROGRAMNAME} still running"  2>&1 | tee -a ${LOG}
-  #exit 1
+  exit 1
 fi
 
 echo "INFO: Checking if rclone is still running"  2>&1 | tee -a ${LOG}
 if [[ $(ps -Af | grep "[ ]rclone") != "" ]]; then
   echo "ERROR: rclone still running"  2>&1 | tee -a ${LOG}
-  #exit 1
+  exit 1
 fi
 
 echo "INFO: Checking if the volume is mounted" 2>&1 | tee -a ${LOG}
