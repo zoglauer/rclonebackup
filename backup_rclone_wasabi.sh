@@ -5,7 +5,7 @@
 ulimit -m 16777216
 
 
-PROGRAMNAME="backup_rclone.sh"
+PROGRAMNAME="backup_rclone_wasabi.sh"
 
 help() {
   echo ""
@@ -124,23 +124,21 @@ if [ ! -d ${RAIDDIR} ]; then
   exit 1
 fi
 
-echo "INFO: Checking if the rclone.conf file exists" 2>&1 | tee -a ${LOG}
+echo "INFO: Checking if the conf file exists" 2>&1 | tee -a ${LOG}
 if [ ! -f ${RCLONECONFIG} ]; then
-  echo "ERROR: There is no rclone.conf file in the start directory" 2>&1 | tee -a ${LOG}
+  echo "ERROR: The rclone conf file \"${RCLONECONFIG}\" is not in the start directory" 2>&1 | tee -a ${LOG}
   exit 1
 fi
 
 echo "INFO: Checking if this script is still running"  2>&1 | tee -a ${LOG}
-#ps -efww | grep -w "[b]ackup_rclone.sh" | grep -v $$ | grep -v "sudo"
-#Status=`ps -efww | grep -w "[b]ackup_rclone.sh" | grep -v $$ | grep -v "sudo" | grep -v "timeout" | awk -vpid=$$ '$2 != pid { print $2 }'`
-STATUS=$(ps -efww | grep -w -E "root.*backup_rclone.sh" | grep -v "grep" | grep -v "sudo" | grep -v "timeout" | grep -v $$)
+STATUS=$(ps -efww | grep -w -E "root.*${PROGRAMNAME}.*${NAME}" | grep -v "grep" | grep -v "sudo" | grep -v "timeout" | grep -v $$)
 if [[ ${STATUS} != "" ]]; then
   echo "ERROR: ${PROGRAMNAME} still running"  2>&1 | tee -a ${LOG}
   exit 1
 fi
 
 echo "INFO: Checking if rclone is still running"  2>&1 | tee -a ${LOG}
-if [[ $(ps -Af | grep "[ ]rclone") != "" ]]; then
+if [[ $(ps -Af | grep "[ ]rclone" | grep "${NAME}") != "" ]]; then
   echo "ERROR: rclone still running"  2>&1 | tee -a ${LOG}
   exit 1
 fi
@@ -152,18 +150,7 @@ if [[ $(grep ${RAIDDIR} /proc/mounts) == "" ]]; then
 fi
 
 echo "INFO: Finding mount point" 2>&1 | tee -a ${LOG}
-# mdadm/ext4
-MOUNTPOINT=$(findmnt -n -o SOURCE --target "${RAIDDIR}" | grep /dev/md | head -1)
-if [[ ${MOUNTPOINT} == "" ]]; then
-  # zfs
-  MOUNTPOINT=$(findmnt -n -o SOURCE | grep ${NAME})
-  if [[ ${MOUNTPOINT} == "" ]]; then
-    echo "ERROR: Mount point not found" 2>&1 | tee -a ${LOG}
-    exit 1
-  fi
-fi
-MOUNTPOINT=$(basename ${MOUNTPOINT})
-
+MOUNTPOINT=$(findmnt -rn -o TARGET | grep "/volumes/${NAME}")
 if [[ ${MOUNTPOINT} == "" ]]; then
   echo "ERROR: Mount point not found" 2>&1 | tee -a ${LOG}
   exit 1
@@ -241,6 +228,7 @@ echo " " 2>&1 | tee -a ${LOG}
 
 # 2022/2/12: Copy links as .rclonelink to avoid dangling links
 OPTIONS="--config ${RCLONECONFIG} -P --stats 1m -l --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+OPTIONS="--config ${RCLONECONFIG} -P --stats 1m -l --fast-list --transfers=32 --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 if [[ ${VERBOSE} == "FALSE" ]]; then
   OPTIONS="--stats-one-line ${OPTIONS}"
 fi
