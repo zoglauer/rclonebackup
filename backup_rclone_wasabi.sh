@@ -102,7 +102,7 @@ echo " " 2>&1 | tee -a ${LOG}
 echo " " 2>&1 | tee -a ${LOG}
 echo " " 2>&1 | tee -a ${LOG}
 echo " " 2>&1 | tee -a ${LOG}
-echo "INFO: Started backup script for ${NAME} @ $(date)" 2>&1 | tee -a ${LOG}
+echo "INFO: Started backup script for ${NAME} to Wasabi @ $(date)" 2>&1 | tee -a ${LOG}
 echo " " 2>&1 | tee -a ${LOG}
 
 if [[ ${TIMEOUT} -ge 2 ]]; then
@@ -134,6 +134,7 @@ echo "INFO: Checking if this script is still running"  2>&1 | tee -a ${LOG}
 STATUS=$(ps -efww | grep -w -E "root.*${PROGRAMNAME}.*${NAME}" | grep -v "grep" | grep -v "sudo" | grep -v "timeout" | grep -v $$)
 if [[ ${STATUS} != "" ]]; then
   echo "ERROR: ${PROGRAMNAME} still running"  2>&1 | tee -a ${LOG}
+  echo "DEBUG: Status=${STATUS}"  2>&1 | tee -a ${LOG}
   exit 1
 fi
 
@@ -228,7 +229,7 @@ echo " " 2>&1 | tee -a ${LOG}
 
 # 2022/2/12: Copy links as .rclonelink to avoid dangling links
 OPTIONS="--config ${RCLONECONFIG} -P --stats 1m -l --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
-OPTIONS="--config ${RCLONECONFIG} -P --stats 1m -l --fast-list --transfers=32 --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+OPTIONS="--config ${RCLONECONFIG} -P --stats 1m -l --fast-list --transfers=32 --checkers=32 --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 if [[ ${VERBOSE} == "FALSE" ]]; then
   OPTIONS="--stats-one-line ${OPTIONS}"
 fi
