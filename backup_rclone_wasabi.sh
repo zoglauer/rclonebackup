@@ -147,11 +147,11 @@ fi
 
 echo "INFO: Checking if the volume is mounted" 2>&1 | tee -a ${LOG}
 if [[ $(grep ${RAIDDIR} /proc/mounts) == "" ]]; then
-  echo "ERROR: Raid not mounted" 2>&1 | tee -a ${LOG}
+  echo "ERROR: RAID not mounted" 2>&1 | tee -a ${LOG}
   exit 1
 fi
 
-echo "INFO: Finding mount point" 2>&1 | tee -a ${LOG}
+echo "INFO: Checking if mount point exists" 2>&1 | tee -a ${LOG}
 MOUNTPOINT=$(findmnt -rn -o TARGET | grep "/volumes/${NAME}")
 if [[ ${MOUNTPOINT} == "" ]]; then
   echo "ERROR: Mount point not found" 2>&1 | tee -a ${LOG}
@@ -168,10 +168,10 @@ fi
 #  fi
 #fi
 
-echo "INFO: Running \"du\" to trigger any failures" 2>&1 | tee -a ${LOG}
+echo "INFO: Checking if \"du\" triggers any failures" 2>&1 | tee -a ${LOG}
 du -s ${RAIDDIR}/${USERDIR} 2>&1 > /dev/null
 if [ "$?" != "0" ]; then
-    echo "ERROR: Unable to read directory size via du" 2>&1 | tee -a ${LOG}
+    echo "ERROR: Unable to read directory size via du / executing du triggered errors" 2>&1 | tee -a ${LOG}
     exit 1
 fi
 
