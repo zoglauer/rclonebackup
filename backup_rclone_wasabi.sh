@@ -6,6 +6,8 @@ ulimit -m 16777216
 
 
 PROGRAMNAME="backup_rclone_wasabi.sh"
+CURRENTPID=$$
+PARENTPID=$(ps -o ppid= -p ${CURRENTPID})
 
 help() {
   echo ""
@@ -131,16 +133,15 @@ if [ ! -f ${RCLONECONFIG} ]; then
 fi
 
 echo "INFO: Checking if this script is still running"  2>&1 | tee -a ${LOG}
-STATUS=$(ps -efww | grep -w -E "root.*${PROGRAMNAME}.*${NAME}" | grep -v "grep" | grep -v "sudo" | grep -v "timeout" | grep -v $$)
+STATUS=$(ps -efww | grep -w -E "root.*bin.*${PROGRAMNAME}.*${NAME}" | grep -v "grep" | grep -v "sudo" | grep -v "timeout" | grep -v ${PARENTPID})
 if [[ ${STATUS} != "" ]]; then
-  echo "ERROR: ${PROGRAMNAME} still running"  2>&1 | tee -a ${LOG}
-  echo "DEBUG: Status=${STATUS}"  2>&1 | tee -a ${LOG}
+  echo "ERROR: ${PROGRAMNAME} still running for ${NAME}" 2>&1 | tee -a ${LOG}
   exit 1
 fi
 
 echo "INFO: Checking if rclone is still running"  2>&1 | tee -a ${LOG}
 if [[ $(ps -Af | grep "[ ]rclone" | grep "${NAME}") != "" ]]; then
-  echo "ERROR: rclone still running"  2>&1 | tee -a ${LOG}
+  echo "ERROR: rclone still running for ${NAME}"  2>&1 | tee -a ${LOG}
   exit 1
 fi
 
