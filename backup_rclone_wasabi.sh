@@ -249,7 +249,7 @@ echo " " 2>&1 | tee -a ${LOG}
 if [[ ${RCLONEEXITCODE} != 0 ]]; then
   echo "ERROR [${NAME}]: rclone exited with non-zero code ${RCLONEEXITCODE}" 2>&1 | tee -a ${LOG}
 fi
-if [[ ${RCLONEOUTPUT} == *Failed to copy* ]]; then
+if [[ ${RCLONEOUTPUT} == *"Failed to copy"* ]]; then
   echo "ERROR [${NAME}]: Some files failed to copy" 2>&1 | tee -a ${LOG}
 fi
 
