@@ -231,8 +231,8 @@ echo " " 2>&1 | tee -a ${LOG}
 OPTIONS="--config ${RCLONECONFIG} -P --stats 1m -l --fast-list --transfers=2 --check-first --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 # 2024/6/20: Wasabi transfer speed up
 OPTIONS="--config ${RCLONECONFIG} -P --stats 1m -l --fast-list --transfers=32 --checkers=32 --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
-# Limit server side copy size:
-OPTIONS="--config ${RCLONECONFIG} -P --stats 1m -l --fast-list --transfers=32 --checkers=32 --s3-copy-cutoff 2000M --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
+# Limit server side copy size & retries:
+OPTIONS="--config ${RCLONECONFIG} -P --stats 1m -l --fast-list --transfers=32 --checkers=32 --retries 1 --s3-copy-cutoff 2000M --backup-dir ${BACKUPDIFFDIR} ${FILTER} ${EXCLUDE} sync ${RAIDDIR} ${BACKUPDIR}"
 if [[ ${VERBOSE} == "FALSE" ]]; then
   OPTIONS="--stats-one-line ${OPTIONS}"
 fi
