@@ -188,14 +188,19 @@ if [[ ${BACKUPHOMEDESTINATION} != "" ]]; then
     mkdir ${RAIDDIR}/${BACKUPHOMEDESTINATION}
   fi
 
+  if [[ ! -d ${RAIDDIR}/${BACKUPHOMEDESTINATION}/${HOSTNAME} ]]; then
+    mkdir ${RAIDDIR}/${BACKUPHOMEDESTINATION}/${HOSTNAME}
+  fi
+
+
   for D in `find /home -maxdepth 1 -mindepth 1 -type d`; do
-    if [[ ${D} != *"lost+found"* ]]; then
+    if [[ ${D} != *"lost+found"* ]] && [[ ${D} != *"simy"* ]]; then
       echo "INFO [${NAME}]: Starting backup of ${D} @ $(date) ...  " 2>&1 | tee -a ${LOG}
-      PREFIX="Backup.$(basename ${D})"
-      bash $(dirname "$0")/backup_tar.sh -p="${PREFIX}" -f="${D}" -a="${RAIDDIR}/${BACKUPHOMEDESTINATION}" -r=1 -d=5 2>&1 | tee -a ${LOG}
+      bash $(dirname "$0")/backup_rsync.sh --f="${D}" -a="${RAIDDIR}/${BACKUPHOMEDESTINATION}/${HOSTNAME}/" 2>&1 | tee -a ${LOG}
     fi
   done
 fi
+
 
 echo " " 2>&1 | tee -a ${LOG} 
 #echo "INFO: Starting backup @ $(date) ...  " 2>&1 | tee -a ${LOG}
@@ -287,7 +292,7 @@ LIST=$(rclone --config ${RCLONECONFIG} lsd ${BACKUPBASE}: 2>&1)
 DIRS=$(echo "${LIST}" | awk '{ print $5 }')
 
 TOBEDELETED=""
-NINETYDAYSAGO=$(date --date="90 days ago" +%s)
+NINETYDAYSAGO=$(date --date="35 days ago" +%s)
 for D in ${DIRS}; do
   echo "${D}" 2>&1 | tee -a ${LOG}
   if [[ ${D} == latest-diff-* ]]; then
