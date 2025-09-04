@@ -1,5 +1,6 @@
 + */Products/**
 + */Release/**
++ */Ancillary/**
 - *.sim
 - *.sim.gz
 - *.tra
