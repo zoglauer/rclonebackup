@@ -1,8 +1,6 @@
 #!/bin/bash
 
 PROGRAMNAME="backup_homes.sh"
-CURRENTPID=$$
-PARENTPID=$(ps -o ppid= -p ${CURRENTPID})
 
 set -o pipefail
 

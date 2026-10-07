@@ -24,7 +24,7 @@ CMD=( "$@" )
 
 # Check for help
 for C in "${CMD[@]}"; do
-  if [[ ${C} == *-h* ]]; then
+  if [[ ${C} == "-h" ]] || [[ ${C} == "--help" ]]; then
     echo ""
     help
     exit 0
@@ -37,11 +37,11 @@ ARCHIVE="NONE____NONE"
 
 # Overwrite default options with user options:
 for C in "${CMD[@]}"; do
-  if [[ ${C} == *-f*=* ]]; then
-    FOLDER=`echo ${C} | awk -F"=" '{ print $2 }'`
-  elif [[ ${C} == *-a*=* ]]; then
-    ARCHIVE=`echo ${C} | awk -F"=" '{ print $2 }'`
-  elif [[ ${C} == *-h* ]]; then
+  if [[ ${C} == --folder=* ]] || [[ ${C} == --f=* ]] || [[ ${C} == -f=* ]]; then
+    FOLDER="${C#*=}"
+  elif [[ ${C} == --archive=* ]] || [[ ${C} == --a=* ]] || [[ ${C} == -a=* ]]; then
+    ARCHIVE="${C#*=}"
+  elif [[ ${C} == "--help" ]] || [[ ${C} == "-h" ]]; then
     echo ""
     help
     exit 0
@@ -108,11 +108,16 @@ echo "INFO: Switching to directory ${FOLDER}"
 cd ${FOLDER}
 
 echo "INFO: Starting rsync"
-#rsync -ah --delete --info=progress2 ${FOLDER}/ ${ARCHIVE}/
 rsync -ah --delete  --exclude=".cache" --exclude=".gvfs" --exclude=".local/share/Trash" --exclude=".thumbnails" ${FOLDER} ${ARCHIVE}/
+RSYNCSTATUS=$?
+if [[ ${RSYNCSTATUS} -ne 0 ]] && [[ ${RSYNCSTATUS} -ne 24 ]]; then
+  echo "ERROR: rsync failed with exit code ${RSYNCSTATUS}"
+  exit ${RSYNCSTATUS}
+fi
 
 echo "INFO: DONE"
 echo ""
 echo ""
 
+exit 0
 
