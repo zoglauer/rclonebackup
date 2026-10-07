@@ -47,7 +47,7 @@ for C in "${CMD[@]}"; do
     exit 0
   else
     echo ""
-    echo "ERROR: Unknown command line option: ${C}"
+    echo "ERROR [backup_rsync]: Unknown command line option: ${C}"
     echo "       See \"${PROGRAMNAME} --help\" for a list of options"
     exit 1
   fi
@@ -57,7 +57,7 @@ done
 
 if [[ ${FOLDER} == "NONE____NONE" ]]; then
   echo ""
-  echo "ERROR: You need to give a folder to backup"
+  echo "ERROR [backup_rsync]: You need to give a folder to backup"
   echo ""
   exit 1
 fi
@@ -66,14 +66,14 @@ FOLDER="${FOLDER/#\~/$HOME}"
 FOLDER=$(realpath ${FOLDER})
 if [[ ! -d ${FOLDER} ]]; then
   echo ""
-  echo "ERROR: The directory to backup does not exist: ${FOLDER}"
+  echo "ERROR [backup_rsync]: The directory to backup does not exist: ${FOLDER}"
   echo ""
   exit 1
 fi
 
 if [[ ${ARCHIVE} == "NONE____NONE" ]]; then
   echo ""
-  echo "ERROR: You need to give a ARCHIVE directory where to store the backup"
+  echo "ERROR [backup_rsync]: You need to give a ARCHIVE directory where to store the backup"
   echo ""
   exit 1
 fi
@@ -82,14 +82,14 @@ ARCHIVE="${ARCHIVE/#\~/$HOME}"
 ARCHIVE=$(realpath ${ARCHIVE})
 if [[ ! -d ${ARCHIVE} ]]; then
   echo ""
-  echo "ERROR: The directory where to store the backup does not exist: ${ARCHIVE}"
+  echo "ERROR [backup_rsync]: The directory where to store the backup does not exist: ${ARCHIVE}"
   echo ""
   exit 1
 fi
 
 if [[ ${ARCHIVE} == ${FOLDER}* ]]; then
   echo ""
-  echo "ERROR: The ARCHIVE directory cannot be in the path of the folder directory"
+  echo "ERROR [backup_rsync]: The ARCHIVE directory cannot be in the path of the folder directory"
   echo ""
   exit 1
 fi
@@ -98,7 +98,7 @@ TESTFILE="${ARCHIVE}/.backup_chown_test"
 touch "${TESTFILE}" 2>/dev/null
 if [[ $? -ne 0 ]]; then
   echo ""
-  echo "ERROR: Cannot write to the archive directory: ${ARCHIVE}"
+  echo "ERROR [backup_rsync]: Cannot write to the archive directory: ${ARCHIVE}"
   echo ""
   exit 1
 fi
@@ -106,31 +106,79 @@ fi
 chown 12345:12345 "${TESTFILE}" 2>/dev/null
 if [[ $? -eq 0 ]]; then
   RSYNCOPTIONS="-ah"
-  echo "INFO: Archive allows changing ownership -- preserving owners, groups, and devices"
 else
   RSYNCOPTIONS="-ah --no-owner --no-group --no-devices --chmod=Du+rwx"
-  echo "INFO: Archive does not allow changing ownership (e.g. root-squashed NFS) -- owners and groups will NOT be preserved"
+  echo "INFO [backup_rsync]: Archive does not allow preserving ownership and thus data is saved without"
 fi
 rm -f "${TESTFILE}"
 
 
 echo ""
-echo "INFO: Using this folder:                                          ${FOLDER}" 
-echo "INFO: Using this archive directory:                               ${ARCHIVE}"
+echo "INFO [backup_rsync]: Using this folder: ${FOLDER}" 
+echo "INFO [backup_rsync]: Using this archive directory: ${ARCHIVE}"
 
 # Now do the actual backup
-echo "INFO: Switching to directory ${FOLDER}"
+echo "INFO [backup_rsync]: Switching to directory ${FOLDER}"
 cd ${FOLDER}
 
-echo "INFO: Starting rsync"
+echo "INFO [backup_rsync]: Starting rsync and watchdog"
 rsync ${RSYNCOPTIONS} --delete  --exclude=".cache" --exclude=".gvfs" --exclude=".local/share/Trash" --exclude=".thumbnails" ${FOLDER} ${ARCHIVE}/
+RSYNCPID=$!
+
+# Watchdog: 
+IDLE_TIME=0
+MAX_IDLE_TIME=600
+CHECKINTERVAL=60
+LAST_TOTAL_IO_AMOUNT=""
+while kill -0 ${RSYNCPID} 2>/dev/null; do
+  sleep ${CHECKINTERVAL}
+
+  # get all rsync PIDs
+  PIDS="${RSYNCPID}"
+  for P in $(pgrep -P ${RSYNCPID}); do
+    PIDS="${PIDS} ${P} $(pgrep -P ${P})"  # child and its children
+  done
+
+  TOTAL_IO_AMOUNT=0
+  for P in ${PIDS}; do
+    IO=$(awk '/^(rchar|wchar):/ { s += $2 } END { print s+0 }' /proc/${P}/io 2>/dev/null)
+    if [[ ${IO} != "" ]]; then
+      TOTAL_IO_AMOUNT=$(( TOTAL_IO_AMOUNT + IO ))
+    fi
+  done
+
+  if [[ ${TOTAL_IO_AMOUNT} == "${LAST_TOTAL_IO_AMOUNT}" ]]; then
+    IDLE_TIME=$(( IDLE_TIME + CHECKINTERVAL ))
+  else
+    IDLE_TIME=0
+  fi
+  LAST_TOTAL_IO_AMOUNT=${TOTAL_IO_AMOUNT}
+
+  if [[ ${IDLE_TIME} -ge ${MAX_IDLE_TIME} ]]; then
+    echo "ERROR [backup_rsync]: rsync did not have any I/O for ${MAXIDLE} seconds and subsequently killed"
+    kill -9 ${PIDS} 2>/dev/null
+    break
+  fi
+done
+
+wait ${RSYNCPID}
 RSYNCSTATUS=$?
+
+
+if [[ ${RSYNCSTATUS} -eq 30 ]]; then
+  echo "ERROR [backup_rsync]: rsync had no data transferred for 10 minutes and timed out"
+  exit ${RSYNCSTATUS}
+fi
+if [[ ${RSYNCSTATUS} -eq 137 ]]; then
+  echo "ERROR [backup_rsync]: rsync was hanging and killed by the watchdog"
+  exit ${RSYNCSTATUS}
+fi
 if [[ ${RSYNCSTATUS} -ne 0 ]] && [[ ${RSYNCSTATUS} -ne 24 ]]; then
-  echo "ERROR: rsync failed with exit code ${RSYNCSTATUS}"
+  echo "ERROR [backup_rsync]: rsync failed with exit code ${RSYNCSTATUS}"
   exit ${RSYNCSTATUS}
 fi
 
-echo "INFO: DONE"
+echo "INFO [backup_rsync]: DONE"
 echo ""
 echo ""
 
