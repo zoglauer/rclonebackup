@@ -24,23 +24,24 @@ If it is remote, we have to work around root squashing.
 However, this will not preserve file ownership.
 
 
-### Server setup (once per server)
-1. Create the backup user:
+### Server setup
+
+1. Create the default backup user if they do not exist yet:
 ```
    sudo groupadd -g 2100 data-backup
    sudo useradd -r -u 2100 -g 2100 -d / -s /usr/sbin/nologin data-backup
 ```
-3. Create the backup folder for the machine which is backed up, private to that user:
+2. Create the backup folder for the machine which is backed up, private to that user:
 ```
    sudo mkdir -p /volumes/atlas/backups/galatea
    sudo chown 2100:2100 /volumes/atlas/backups/galatea
    sudo chmod 700 /volumes/atlas/backups/galatea
 ```
-4. In /etc/exports (one line per client):
+3. In /etc/exports (one line per client):
 ```
    /volumes/atlas    galatea(rw,sync,no_subtree_check,root_squash,anonuid=2100,anongid=2100)
 ```
-5. Apply: `sudo exportfs -ra`
+4. Apply: `sudo exportfs -ra`
 
 If the setup is wrong, backup_homes.sh should give an error message.
 
@@ -61,7 +62,6 @@ directories come back writable (the backup forces u+rwx on directories).
 ## Usage examples:
 
 ```
-sudo bash backup_homes.sh --name=[Vol] --folder=[folder]
 sudo bash backup_rclone_wasabi.sh --name=[Volume NAME, not location]
 ```
 
@@ -86,7 +86,6 @@ sudo crontab -e
 
 ```
 30 */8 * * * bash /home/andreas/Science/Software/rclonebackup/backup_homes.sh --name=atlas --folder=backups >> /tmp/backup_homes_atlas_cron.log 2>&1
-30 */8 * * * bash /home/andreas/Science/Software/rclonebackup/backup_rclone.sh -n=atlas -b=backups &>> /tmp/BackupAtlas.log
 ```
 
 
