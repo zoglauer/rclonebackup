@@ -128,6 +128,24 @@ if [[ ! -d ${DESTINATION} ]]; then
   fi
 fi
 
+echo "INFO [home-backups]: Checking if the destination is writable" 2>&1 | tee -a ${LOG}
+TESTFILE="${DESTINATION}/.backup_write_test"
+touch "${TESTFILE}" 2>/dev/null
+if [[ $? -ne 0 ]]; then
+  echo "ERROR [home-backups]: Cannot write to ${DESTINATION}" 2>&1 | tee -a ${LOG}
+  echo "ERROR [home-backups]: If the raid is an NFS share: the export needs root_squash,anonuid=<UID>,anongid=<GID>" 2>&1 | tee -a ${LOG}
+  echo "ERROR [home-backups]: and the backup folder on the server must be owned by that UID/GID -- see README" 2>&1 | tee -a ${LOG}
+  exit 1
+fi
+
+TESTOWNER=$(stat -c %u "${TESTFILE}")
+rm -f "${TESTFILE}"
+if [[ ${TESTOWNER} == "65534" ]]; then
+  echo "ERROR [home-backups]: Files on ${DESTINATION} are created as 'nobody' (UID 65534)" 2>&1 | tee -a ${LOG}
+  echo "ERROR [home-backups]: The NFS export is missing anonuid=<UID>,anongid=<GID> -- see README" 2>&1 | tee -a ${LOG}
+  exit 1
+fi
+
 
 FAILED=""
 for D in `find /home -maxdepth 1 -mindepth 1 -type d`; do

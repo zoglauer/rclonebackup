@@ -94,6 +94,26 @@ if [[ ${ARCHIVE} == ${FOLDER}* ]]; then
   exit 1
 fi
 
+TESTFILE="${ARCHIVE}/.backup_chown_test"
+touch "${TESTFILE}" 2>/dev/null
+if [[ $? -ne 0 ]]; then
+  echo ""
+  echo "ERROR: Cannot write to the archive directory: ${ARCHIVE}"
+  echo ""
+  exit 1
+fi
+
+chown 12345:12345 "${TESTFILE}" 2>/dev/null
+if [[ $? -eq 0 ]]; then
+  RSYNCOPTIONS="-ah"
+  echo "INFO: Archive allows changing ownership -- preserving owners, groups, and devices"
+else
+  RSYNCOPTIONS="-ah --no-owner --no-group --no-devices --chmod=Du+rwx"
+  echo "INFO: Archive does not allow changing ownership (e.g. root-squashed NFS) -- owners and groups will NOT be preserved"
+fi
+rm -f "${TESTFILE}"
+
+
 echo ""
 echo "INFO: Using this folder:                                          ${FOLDER}" 
 echo "INFO: Using this archive directory:                               ${ARCHIVE}"
@@ -103,7 +123,7 @@ echo "INFO: Switching to directory ${FOLDER}"
 cd ${FOLDER}
 
 echo "INFO: Starting rsync"
-rsync -ah --delete  --exclude=".cache" --exclude=".gvfs" --exclude=".local/share/Trash" --exclude=".thumbnails" ${FOLDER} ${ARCHIVE}/
+rsync ${RSYNCOPTIONS} --delete  --exclude=".cache" --exclude=".gvfs" --exclude=".local/share/Trash" --exclude=".thumbnails" ${FOLDER} ${ARCHIVE}/
 RSYNCSTATUS=$?
 if [[ ${RSYNCSTATUS} -ne 0 ]] && [[ ${RSYNCSTATUS} -ne 24 ]]; then
   echo "ERROR: rsync failed with exit code ${RSYNCSTATUS}"
