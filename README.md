@@ -3,7 +3,7 @@
 ## Usage examples:
 
 ```
-sudo bash backup_homes.sh --name=[Vol] --backuphomes=[folder]
+sudo bash backup_homes.sh --name=[Vol] --folder=[folder]
 sudo bash backup_rclone_wasabi.sh --name=[Volume NAME, not location]
 ```
 
@@ -27,7 +27,7 @@ sudo crontab -e
 ```
 
 ```
-30 */8 * * * bash /home/andreas/Science/Software/rclonebackup/backup_homes.sh -n=atlas -b=backups &>> /tmp/BackupHomesAtlas.log
+30 */8 * * * bash /home/andreas/Science/Software/rclonebackup/backup_homes.sh --name=atlas --backuphomes=backups >> /tmp/backup_homes_atlas_cron.log 2>&1
 30 */8 * * * bash /home/andreas/Science/Software/rclonebackup/backup_rclone.sh -n=atlas -b=backups &>> /tmp/BackupAtlas.log
 ```
 

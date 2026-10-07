@@ -13,7 +13,7 @@ help() {
   echo ""
   echo "Options:"
   echo "  --name=[name]: The name of the raid to clone the data to-- it  is assumed it mounted under /volumes"
-  echo "  --backuphomes=[destination]: The sub folder on the raid, where we rsync the data to"
+  echo "  --folder=[destination]: The sub folder on the raid, where we rsync the data to"
   echo ""
 }
 
@@ -32,15 +32,15 @@ done
 
 # Default options
 NAME=""
-BACKUPHOMEDESTINATION="backups"
+FOLDER="backups"
 EXCLUDES="docker simy lost+found"
 
 # Scan all options
 for C in "${CMD[@]}"; do
   if [[ ${C} == --name=* ]] || [[ ${C} == -n=* ]]; then
     NAME="${C#*=}"
-  elif [[ ${C} == --backuphomes=* ]] || [[ ${C} == -b=* ]]; then
-    BACKUPHOMEDESTINATION="${C#*=}"
+  elif [[ ${C} == --folder=* ]] || [[ ${C} == -f=* ]]; then
+    FOLDER="${C#*=}"
   elif [[ ${C} == "--help" ]] || [[ ${C} == "-h" ]]; then
     echo ""
     help
@@ -119,7 +119,7 @@ echo " " 2>&1 | tee -a ${LOG}
 echo "INFO [home-backups]: Starting backup of home directories @ $(date) ...  " 2>&1 | tee -a ${LOG}
 
 
-DESTINATION="${RAIDDIR}/${BACKUPHOMEDESTINATION}/${HOSTNAME}"
+DESTINATION="${RAIDDIR}/${FOLDER}/${HOSTNAME}"
 if [[ ! -d ${DESTINATION} ]]; then
   mkdir -p "${DESTINATION}"
   if [[ $? -ne 0 ]]; then
