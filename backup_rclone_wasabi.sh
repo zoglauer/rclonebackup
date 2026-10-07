@@ -19,6 +19,7 @@ help() {
   echo "Options:"
   echo "  --name=[name]: The name of the raid to clone -- it  is assumed it mounted under /volumes"
   echo "  --backuphomes=[destination]: If set, backup all home directories to [destination], which needs to be on the raid (top level)"
+  echo "  --only-backup-homes: Only backup the home directories"
   echo "  --timeout=[hours]: Set a timeout in hours, default is 22 hours"
   echo "  --do-size-check / --no-size-check: Check for remote size"
   echo "  --filter: Filter standard files (sim, tra, evta, rsp)"
@@ -47,6 +48,7 @@ done
 # Default options
 NAME=""
 BACKUPHOMEDESTINATION=""
+BACKUPONLYHOMES="FALSE"
 TIMEOUT=21
 SIZECHECK="TRUE"
 FILTERFILES="FALSE"
@@ -60,6 +62,8 @@ for C in "${CMD[@]}"; do
     NAME=`echo ${C} | awk -F"=" '{ print $2 }'`
   elif [[ ${C} == *-b*=* ]]; then
     BACKUPHOMEDESTINATION=`echo ${C} | awk -F"=" '{ print $2 }'`
+  elif [[ ${C} == *-o* ]]; then
+    BACKUPONLYHOMES="TRUE" 
   elif [[ ${C} == *-t*=* ]]; then
     TIMEOUT=`echo ${C} | awk -F"=" '{ print $2 }'`
   elif [[ ${C} == *-do-size-c* ]]; then
@@ -145,35 +149,25 @@ if [[ $(ps -Af | grep "[ ]rclone" | grep "${NAME}") != "" ]]; then
   exit 1
 fi
 
-echo "INFO [${NAME}]: Checking if the volume is mounted" 2>&1 | tee -a ${LOG}
-if [[ $(grep ${RAIDDIR} /proc/mounts) == "" ]]; then
-  echo "ERROR [${NAME}]: Raid not mounted" 2>&1 | tee -a ${LOG}
+echo "INFO [${NAME}]: Try to access volumes or tigger autofs/NFS mount" 2>&1 | tee -a ${LOG} 
+if ! timeout 3 ls -d "/volumes/${NAME}" >/dev/null 2>&1; then
+  echo "ERROR [${NAME}]: Mount point /volumes/${NAME} not accessible" 2>&1 | tee -a "${LOG}"
   exit 1
 fi
 
-echo "INFO [${NAME}]: Checking if mount point exists" 2>&1 | tee -a ${LOG}
+echo "INFO [${NAME}]: Checking if mount point really exists and is not just a local volume" 2>&1 | tee -a ${LOG}
 MOUNTPOINT=$(findmnt -rn -o TARGET | grep "/volumes/${NAME}")
 if [[ ${MOUNTPOINT} == "" ]]; then
   echo "ERROR [${NAME}]: Mount point not found" 2>&1 | tee -a ${LOG}
   exit 1
 fi
 
-# Second, that everything is OK with it if it is an mdadm raid:
-
-#if [[ ${MOUNTPOINT} == md* ]]; then 
-#  echo "INFO: Checking if the raid is not degraded" 2>&1 | tee -a ${LOG}
-#  if grep -A1 ${MOUNTPOINT} /proc/mdstat | tail -n 1 | awk '{print $NF }' | grep _ > /dev/null; then 
-#    echo "ERROR: Failed disks, not syncing" 2>&1 | tee -a ${LOG}
-#    exit 1
-#  fi
+#echo "INFO [${NAME}]: Checking if \"du\" triggers any failures" 2>&1 | tee -a ${LOG}
+#du -s ${RAIDDIR}/${USERDIR} 2>&1 > /dev/null
+#if [ "$?" != "0" ]; then
+#  echo "ERROR [${NAME}]: Unable to read directory size via du or executing du triggered errors" 2>&1 | tee -a ${LOG}
+#  exit 1
 #fi
-
-echo "INFO [${NAME}]: Checking if \"du\" triggers any failures" 2>&1 | tee -a ${LOG}
-du -s ${RAIDDIR}/${USERDIR} 2>&1 > /dev/null
-if [ "$?" != "0" ]; then
-  echo "ERROR [${NAME}]: Unable to read directory size via du or executing du triggered errors" 2>&1 | tee -a ${LOG}
-   exit 1
-fi
 
 
 echo " " 2>&1 | tee -a ${LOG} 
@@ -199,6 +193,12 @@ if [[ ${BACKUPHOMEDESTINATION} != "" ]]; then
       bash $(dirname "$0")/backup_rsync.sh --f="${D}" -a="${RAIDDIR}/${BACKUPHOMEDESTINATION}/${HOSTNAME}/" 2>&1 | tee -a ${LOG}
     fi
   done
+fi
+
+if [[ ${BACKUPONLYHOMES} == "TRUE" ]]; then
+  echo " " 2>&1 | tee -a ${LOG}
+  echo "INFO [${NAME}]: Done @ $(date)! " 2>&1 | tee -a ${LOG}
+  exit 0
 fi
 
 

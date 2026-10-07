@@ -108,7 +108,7 @@ if [[ $? -eq 0 ]]; then
   RSYNCOPTIONS="-ah"
 else
   RSYNCOPTIONS="-ah --no-owner --no-group --no-devices --chmod=Du+rwx"
-  echo "INFO [backup_rsync]: Archive does not allow preserving ownership and thus data is saved without"
+  echo "INFO [backup_rsync]: Archive does not allow preserving ownership and thus data is saved without ownership info"
 fi
 rm -f "${TESTFILE}"
 
@@ -122,20 +122,21 @@ echo "INFO [backup_rsync]: Switching to directory ${FOLDER}"
 cd ${FOLDER}
 
 echo "INFO [backup_rsync]: Starting rsync and watchdog"
-rsync ${RSYNCOPTIONS} --timeout=600 --delete  --exclude=".cache" --exclude=".gvfs" --exclude=".local/share/Trash" --exclude=".thumbnails" ${FOLDER} ${ARCHIVE}/
-RSYNCPID=$!
+RSYNC_TIMEOUT=600
+rsync ${RSYNCOPTIONS} --timeout=${RSYNC_TIMEOUT} --delete  --exclude=".cache" --exclude=".gvfs" --exclude=".local/share/Trash" --exclude=".thumbnails" ${FOLDER} ${ARCHIVE}/ &
+RSYNC_PID=$!
 
 # Watchdog: 
 IDLE_TIME=0
-MAX_IDLE_TIME=120
-CHECKINTERVAL=10
+MAX_IDLE_TIME=600
+CHECK_INTERVAL=10
 LAST_TOTAL_IO_AMOUNT=""
-while kill -0 ${RSYNCPID} 2>/dev/null; do
+while kill -0 ${RSYNC_PID} 2>/dev/null; do
   sleep ${CHECKINTERVAL}
 
   # get all rsync PIDs
-  PIDS="${RSYNCPID}"
-  for P in $(pgrep -P ${RSYNCPID}); do
+  PIDS="${RSYNC_PID}"
+  for P in $(pgrep -P ${RSYNC_PID}); do
     PIDS="${PIDS} ${P} $(pgrep -P ${P})"  # child and its children
   done
 
@@ -148,34 +149,34 @@ while kill -0 ${RSYNCPID} 2>/dev/null; do
   done
 
   if [[ ${TOTAL_IO_AMOUNT} == "${LAST_TOTAL_IO_AMOUNT}" ]]; then
-    IDLE_TIME=$(( IDLE_TIME + CHECKINTERVAL ))
+    IDLE_TIME=$(( IDLE_TIME + CHECK_INTERVAL ))
   else
     IDLE_TIME=0
   fi
   LAST_TOTAL_IO_AMOUNT=${TOTAL_IO_AMOUNT}
 
   if [[ ${IDLE_TIME} -ge ${MAX_IDLE_TIME} ]]; then
-    echo "ERROR [backup_rsync]: rsync did not have any I/O for ${MAX_IDLE_TIME} seconds and subsequently killed"
+    echo "ERROR [backup_rsync]: rsync did not have any I/O for ${RSYNC_TIMEOUT} seconds and subsequently killed"
     kill -9 ${PIDS} 2>/dev/null
     break
   fi
 done
 
-wait ${RSYNCPID}
-RSYNCSTATUS=$?
+wait ${RSYNC_PID}
+RSYNC_STATUS=$?
 
 
-if [[ ${RSYNCSTATUS} -eq 30 ]]; then
+if [[ ${RSYNC_STATUS} -eq 30 ]]; then
   echo "ERROR [backup_rsync]: rsync had no data transferred for ${MAX_IDLE_TIME} seconds and timed out"
-  exit ${RSYNCSTATUS}
+  exit ${RSYNC_STATUS}
 fi
-if [[ ${RSYNCSTATUS} -eq 137 ]]; then
+if [[ ${RSYNC_STATUS} -eq 137 ]]; then
   echo "ERROR [backup_rsync]: rsync was hanging and killed by the watchdog"
-  exit ${RSYNCSTATUS}
+  exit ${RSYNC_STATUS}
 fi
-if [[ ${RSYNCSTATUS} -ne 0 ]] && [[ ${RSYNCSTATUS} -ne 24 ]]; then
+if [[ ${RSYNC_STATUS} -ne 0 ]] && [[ ${RSYNC_STATUS} -ne 24 ]]; then
   echo "ERROR [backup_rsync]: rsync failed with exit code ${RSYNCSTATUS}"
-  exit ${RSYNCSTATUS}
+  exit ${RSYNC_STATUS}
 fi
 
 echo "INFO [backup_rsync]: DONE"
