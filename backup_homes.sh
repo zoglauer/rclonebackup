@@ -16,7 +16,6 @@ help() {
   echo "Options:"
   echo "  --name=[name]: The name of the raid to clone -- it  is assumed it mounted under /volumes"
   echo "  --backuphomes=[destination]: If set, backup all home directories to [destination], which needs to be on the raid (top level)"
-  echo "  --verbose: Verbose output"
   echo ""
 }
 
@@ -56,6 +55,12 @@ for C in "${CMD[@]}"; do
   fi
 done
 
+# We need root to write the logrotate config, the log file, and to read all home directories
+if [[ ${EUID} -ne 0 ]]; then
+  echo ""
+  echo "ERROR: ${PROGRAMNAME} must be run as root"
+  exit 1
+fi
 
 RAIDDIR="/volumes/${NAME}"
 
@@ -102,7 +107,7 @@ fi
 
 echo "INFO [home-backups]: Checking if the volume is mounted" 2>&1 | tee -a ${LOG}
 if ! mountpoint -q "${RAIDDIR}"; then
-  echo "ERROR [home-backups]: Raid not mounted" | tee -a "${LOG}"
+  echo "ERROR [home-backups]: Raid not mounted" 2>&1 | tee -a ${LOG}
   exit 1
 fi
 
@@ -138,7 +143,7 @@ for D in `find /home -maxdepth 1 -mindepth 1 -type d`; do
 
   if [[ ${EXCLUDED} == "FALSE" ]]; then
     echo "INFO [home-backups]: Starting backup of ${D} @ $(date) ... " 2>&1 | tee -a ${LOG}
-    bash $(dirname "$0")/backup_rsync.sh --f="${D}" -a="${RAIDDIR}/${BACKUPHOMEDESTINATION}/${HOSTNAME}/" 2>&1 | tee -a ${LOG}
+    bash "$(dirname "$0")"/backup_rsync.sh --f="${D}" -a="${RAIDDIR}/${DESTINATION}/" 2>&1 | tee -a ${LOG}
     if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
       echo "ERROR [home-backups]: Backup of ${D} failed" 2>&1 | tee -a ${LOG}
       FAILED="${FAILED} ${D}"
