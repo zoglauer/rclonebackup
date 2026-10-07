@@ -122,13 +122,13 @@ echo "INFO [backup_rsync]: Switching to directory ${FOLDER}"
 cd ${FOLDER}
 
 echo "INFO [backup_rsync]: Starting rsync and watchdog"
-rsync ${RSYNCOPTIONS} --delete  --exclude=".cache" --exclude=".gvfs" --exclude=".local/share/Trash" --exclude=".thumbnails" ${FOLDER} ${ARCHIVE}/
+rsync ${RSYNCOPTIONS} --timeout=600 --delete  --exclude=".cache" --exclude=".gvfs" --exclude=".local/share/Trash" --exclude=".thumbnails" ${FOLDER} ${ARCHIVE}/
 RSYNCPID=$!
 
 # Watchdog: 
 IDLE_TIME=0
-MAX_IDLE_TIME=600
-CHECKINTERVAL=60
+MAX_IDLE_TIME=120
+CHECKINTERVAL=10
 LAST_TOTAL_IO_AMOUNT=""
 while kill -0 ${RSYNCPID} 2>/dev/null; do
   sleep ${CHECKINTERVAL}
@@ -155,7 +155,7 @@ while kill -0 ${RSYNCPID} 2>/dev/null; do
   LAST_TOTAL_IO_AMOUNT=${TOTAL_IO_AMOUNT}
 
   if [[ ${IDLE_TIME} -ge ${MAX_IDLE_TIME} ]]; then
-    echo "ERROR [backup_rsync]: rsync did not have any I/O for ${MAXIDLE} seconds and subsequently killed"
+    echo "ERROR [backup_rsync]: rsync did not have any I/O for ${MAX_IDLE_TIME} seconds and subsequently killed"
     kill -9 ${PIDS} 2>/dev/null
     break
   fi
@@ -166,7 +166,7 @@ RSYNCSTATUS=$?
 
 
 if [[ ${RSYNCSTATUS} -eq 30 ]]; then
-  echo "ERROR [backup_rsync]: rsync had no data transferred for 10 minutes and timed out"
+  echo "ERROR [backup_rsync]: rsync had no data transferred for ${MAX_IDLE_TIME} seconds and timed out"
   exit ${RSYNCSTATUS}
 fi
 if [[ ${RSYNCSTATUS} -eq 137 ]]; then
