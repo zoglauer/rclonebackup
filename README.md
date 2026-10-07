@@ -1,9 +1,10 @@
-# Backing up local drives to google drive
+# Tools to backup local home directories to raid, and raids to wasabi
 
-## Usage:
+## Usage examples:
 
 ```
-sudo bash backup_rclone --name=[Volume NAME, not location]
+sudo bash backup_homes.sh --name=[Vol] --backuphomes=[folder]
+sudo bash backup_rclone_wasabi.sh --name=[Volume NAME, not location]
 ```
 
 ## Assumptions:
@@ -26,6 +27,7 @@ sudo crontab -e
 ```
 
 ```
+30 */8 * * * bash /home/andreas/Science/Software/rclonebackup/backup_homes.sh -n=atlas -b=backups &>> /tmp/BackupHomesAtlas.log
 30 */8 * * * bash /home/andreas/Science/Software/rclonebackup/backup_rclone.sh -n=atlas -b=backups &>> /tmp/BackupAtlas.log
 ```
 

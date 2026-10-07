@@ -12,8 +12,8 @@ help() {
   echo "Usage: bash ${PROGRAMNAME} [options]";
   echo ""
   echo "Options:"
-  echo "  --name=[name]: The name of the raid to clone -- it  is assumed it mounted under /volumes"
-  echo "  --backuphomes=[destination]: If set, backup all home directories to [destination], which needs to be on the raid (top level)"
+  echo "  --name=[name]: The name of the raid to clone the data to-- it  is assumed it mounted under /volumes"
+  echo "  --backuphomes=[destination]: The sub folder on the raid, where we rsync the data to"
   echo ""
 }
 
