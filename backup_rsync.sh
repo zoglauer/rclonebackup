@@ -98,12 +98,7 @@ echo ""
 echo "INFO: Using this folder:                                          ${FOLDER}" 
 echo "INFO: Using this archive directory:                               ${ARCHIVE}"
 
-# For testing create a new file in the folder
-#mktemp -p ${FOLDER}
-
 # Now do the actual backup
-BACKUPPREFIX=${ARCHIVE}/${BACKUPPREFIX}
-
 echo "INFO: Switching to directory ${FOLDER}"
 cd ${FOLDER}
 
