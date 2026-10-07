@@ -122,7 +122,7 @@ echo "INFO [backup_rsync]: Switching to directory ${FOLDER}"
 cd ${FOLDER}
 
 echo "INFO [backup_rsync]: Starting rsync and watchdog"
-RSYNC_TIMEOUT=600
+RSYNC_TIMEOUT=300
 rsync ${RSYNCOPTIONS} --timeout=${RSYNC_TIMEOUT} --delete  --exclude=".cache" --exclude=".gvfs" --exclude=".local/share/Trash" --exclude=".thumbnails" ${FOLDER} ${ARCHIVE}/ &
 RSYNC_PID=$!
 
@@ -132,7 +132,7 @@ MAX_IDLE_TIME=600
 CHECK_INTERVAL=10
 LAST_TOTAL_IO_AMOUNT=""
 while kill -0 ${RSYNC_PID} 2>/dev/null; do
-  sleep ${CHECKINTERVAL}
+  sleep ${CHECK_INTERVAL}
 
   # get all rsync PIDs
   PIDS="${RSYNC_PID}"
@@ -167,7 +167,7 @@ RSYNC_STATUS=$?
 
 
 if [[ ${RSYNC_STATUS} -eq 30 ]]; then
-  echo "ERROR [backup_rsync]: rsync had no data transferred for ${MAX_IDLE_TIME} seconds and timed out"
+  echo "ERROR [backup_rsync]: rsync had no data transferred for ${RSYNC_TIMEOUT} seconds and timed out"
   exit ${RSYNC_STATUS}
 fi
 if [[ ${RSYNC_STATUS} -eq 137 ]]; then
@@ -175,7 +175,7 @@ if [[ ${RSYNC_STATUS} -eq 137 ]]; then
   exit ${RSYNC_STATUS}
 fi
 if [[ ${RSYNC_STATUS} -ne 0 ]] && [[ ${RSYNC_STATUS} -ne 24 ]]; then
-  echo "ERROR [backup_rsync]: rsync failed with exit code ${RSYNCSTATUS}"
+  echo "ERROR [backup_rsync]: rsync failed with exit code ${RSYNC_STATUS}"
   exit ${RSYNC_STATUS}
 fi
 
