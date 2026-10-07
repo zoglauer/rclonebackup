@@ -156,7 +156,7 @@ while kill -0 ${RSYNC_PID} 2>/dev/null; do
   LAST_TOTAL_IO_AMOUNT=${TOTAL_IO_AMOUNT}
 
   if [[ ${IDLE_TIME} -ge ${MAX_IDLE_TIME} ]]; then
-    echo "ERROR [backup_rsync]: rsync did not have any I/O for ${RSYNC_TIMEOUT} seconds and subsequently killed"
+    echo "ERROR [backup_rsync]: rsync did not have any I/O for ${MAX_IDLE_TIME} seconds and subsequently killed"
     kill -9 ${PIDS} 2>/dev/null
     break
   fi
