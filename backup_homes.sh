@@ -4,6 +4,8 @@ PROGRAMNAME="backup_homes.sh"
 CURRENTPID=$$
 PARENTPID=$(ps -o ppid= -p ${CURRENTPID})
 
+set -o pipefail
+
 help() {
   echo ""
   echo "${PROGRAMNAME}";
@@ -14,16 +16,8 @@ help() {
   echo "Options:"
   echo "  --name=[name]: The name of the raid to clone -- it  is assumed it mounted under /volumes"
   echo "  --backuphomes=[destination]: If set, backup all home directories to [destination], which needs to be on the raid (top level)"
-  echo "  --timeout=[hours]: Set a timeout in hours, default is 22 hours"
-  echo "  --do-size-check / --no-size-check: Check for remote size"
-  echo "  --filter: Filter standard files (sim, tra, evta, rsp)"
   echo "  --verbose: Verbose output"
   echo ""
-  echo "Assumptions:"
-  echo "(1) rclone is installed"
-  echo "(2) The raid is mounted under /volumes/<NAME> where <NAME> is supplied at the command line"
-  echo "(3) The rclone.conf file has been copied into this directory"
-  echo "(4) The name of the target remote is <NAME>encrypted, where name is the name of the mounted directory supplied at the command line"  
 }
 
 
@@ -32,7 +26,7 @@ CMD=( "$@" )
 
 # Check for help
 for C in "${CMD[@]}"; do
-  if [[ ${C} == *-h* ]]; then
+  if [[ ${C} == "-h" ]] || [[ ${C} == "--help" ]]; then
     echo ""
     help
     exit 0
@@ -42,19 +36,15 @@ done
 # Default options
 NAME=""
 BACKUPHOMEDESTINATION="backups"
-VERBOSE="FALSE"
-# Docker has too many small files for backup -- we always need to exclude it
-EXCLUDES="docker/ users/simy/"
+EXCLUDES="docker simy lost+found"
 
-# Overwrite default options with user options:
+# Scan all options
 for C in "${CMD[@]}"; do
-  if [[ ${C} == *-n*=* ]]; then
-    NAME=`echo ${C} | awk -F"=" '{ print $2 }'`
-  elif [[ ${C} == *-b*=* ]]; then
-    BACKUPHOMEDESTINATION=`echo ${C} | awk -F"=" '{ print $2 }'`
-  elif [[ ${C} == *-v* ]]; then
-    VERBOSE="TRUE"
-  elif [[ ${C} == *-h* ]]; then
+  if [[ ${C} == --name=* ]] || [[ ${C} == -n=* ]]; then
+    NAME="${C#*=}"
+  elif [[ ${C} == --backuphomes=* ]] || [[ ${C} == -b=* ]]; then
+    BACKUPHOMEDESTINATION="${C#*=}"
+  elif [[ ${C} == "--help" ]] || [[ ${C} == "-h" ]]; then
     echo ""
     help
     exit 0
@@ -65,6 +55,7 @@ for C in "${CMD[@]}"; do
     exit 1
   fi
 done
+
 
 RAIDDIR="/volumes/${NAME}"
 
@@ -110,17 +101,11 @@ if [[ ${STATUS} != "" ]]; then
 fi
 
 echo "INFO [home-backups]: Checking if the volume is mounted" 2>&1 | tee -a ${LOG}
-if [[ $(grep ${RAIDDIR} /proc/mounts) == "" ]]; then
-  echo "ERROR [home-backups]: Raid not mounted" 2>&1 | tee -a ${LOG}
+if ! mountpoint -q "${RAIDDIR}"; then
+  echo "ERROR [home-backups]: Raid not mounted" | tee -a "${LOG}"
   exit 1
 fi
 
-echo "INFO [home-backups]: Checking if mount point exists" 2>&1 | tee -a ${LOG}
-MOUNTPOINT=$(findmnt -rn -o TARGET | grep "/volumes/${NAME}")
-if [[ ${MOUNTPOINT} == "" ]]; then
-  echo "ERROR [home-backups]: Mount point not found" 2>&1 | tee -a ${LOG}
-  exit 1
-fi
 
 echo " " 2>&1 | tee -a ${LOG} 
 echo "INFO [home-backups]: All tests passed! " 2>&1 | tee -a ${LOG}
@@ -128,24 +113,50 @@ echo "INFO [home-backups]: All tests passed! " 2>&1 | tee -a ${LOG}
 echo " " 2>&1 | tee -a ${LOG} 
 echo "INFO [home-backups]: Starting backup of home directories @ $(date) ...  " 2>&1 | tee -a ${LOG}
 
-if [[ ! -d ${RAIDDIR}/${BACKUPHOMEDESTINATION} ]]; then
-  mkdir ${RAIDDIR}/${BACKUPHOMEDESTINATION}
+
+DESTINATION="${RAIDDIR}/${BACKUPHOMEDESTINATION}/${HOSTNAME}"
+if [[ ! -d ${DESTINATION} ]]; then
+  mkdir -p "${DESTINATION}"
+  if [[ $? -ne 0 ]]; then
+    echo "ERROR [home-backups]: Could not create ${DESTINATION}" 2>&1 | tee -a ${LOG}
+    exit 1
+  fi
 fi
 
-if [[ ! -d ${RAIDDIR}/${BACKUPHOMEDESTINATION}/${HOSTNAME} ]]; then
-  mkdir ${RAIDDIR}/${BACKUPHOMEDESTINATION}/${HOSTNAME}
-fi
 
-
+FAILED=""
 for D in `find /home -maxdepth 1 -mindepth 1 -type d`; do
-  if [[ ${D} != *"lost+found"* ]] && [[ ${D} != *"simy"* ]]; then
-    echo "INFO [home-backups]: Starting backup of ${D} @ $(date) ...  " 2>&1 | tee -a ${LOG}
+  HOMENAME=$(basename ${D})
+
+  EXCLUDED="FALSE"
+  for E in ${EXCLUDES}; do
+    if [[ ${HOMENAME} == "${E}" ]]; then
+      EXCLUDED="TRUE"
+    fi
+  done
+
+
+  if [[ ${EXCLUDED} == "FALSE" ]]; then
+    echo "INFO [home-backups]: Starting backup of ${D} @ $(date) ... " 2>&1 | tee -a ${LOG}
     bash $(dirname "$0")/backup_rsync.sh --f="${D}" -a="${RAIDDIR}/${BACKUPHOMEDESTINATION}/${HOSTNAME}/" 2>&1 | tee -a ${LOG}
+    if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+      echo "ERROR [home-backups]: Backup of ${D} failed" 2>&1 | tee -a ${LOG}
+      FAILED="${FAILED} ${D}"
+    fi
   fi
 done
 
+
 echo " " 2>&1 | tee -a ${LOG}
+if [[ ${FAILED} != "" ]]; then
+  echo "ERROR [home-backups]: The following backups failed:${FAILED} @ $(date)" 2>&1 | tee -a ${LOG}
+  exit 1
+fi
+
 echo "INFO [home-backups]: Done @ $(date)! " 2>&1 | tee -a ${LOG}
 
 exit 0
+
+
+
 
