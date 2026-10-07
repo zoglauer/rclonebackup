@@ -99,8 +99,10 @@ if [ ! -d ${RAIDDIR} ]; then
 fi
 
 echo "INFO [home-backups]: Checking if this script is still running"  2>&1 | tee -a ${LOG}
-STATUS=$(ps -efww | grep -w -E "root.*bin.*${PROGRAMNAME}.*${NAME}" | grep -v "grep" | grep -v "sudo" | grep -v "timeout" | grep -v ${PARENTPID})
-if [[ ${STATUS} != "" ]]; then
+LOCKFILE="/var/lock/backup_homes_${NAME}.lock"
+exec 9>${LOCKFILE}
+flock -n 9
+if [[ $? -ne 0 ]]; then
   echo "ERROR [home-backups]: ${PROGRAMNAME} still running for ${NAME}" 2>&1 | tee -a ${LOG}
   exit 1
 fi
@@ -143,7 +145,7 @@ for D in `find /home -maxdepth 1 -mindepth 1 -type d`; do
 
   if [[ ${EXCLUDED} == "FALSE" ]]; then
     echo "INFO [home-backups]: Starting backup of ${D} @ $(date) ... " 2>&1 | tee -a ${LOG}
-    bash "$(dirname "$0")"/backup_rsync.sh --f="${D}" -a="${RAIDDIR}/${DESTINATION}/" 2>&1 | tee -a ${LOG}
+    bash "$(dirname "$0")"/backup_rsync.sh --f="${D}" -a="${DESTINATION}/" 2>&1 | tee -a ${LOG}
     if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
       echo "ERROR [home-backups]: Backup of ${D} failed" 2>&1 | tee -a ${LOG}
       FAILED="${FAILED} ${D}"
